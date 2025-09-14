@@ -8,16 +8,23 @@ use Nova\Console\Contract\IsCommand;
 
 abstract class Command implements IsCommand
 {
-    public readonly string $name;        // 命令名，如 "app:serve"
-    public readonly string $desc;        // 描述
-    public readonly string $usage;       // 用法说明
+    public function __construct(
+        public readonly string $name = '',        // 命令名，如 "app:serve"
+        public readonly string $desc = '',        // 描述
+        public readonly string $usage = ''       // 用法说明
+    ) {
+    }
 
     /**
      * 设置命令名称
      */
     protected function setName(string $name): static
     {
-        $this->name = $name;
+        // 使用反射绕过readonly限制来设置属性值
+        $reflection = new \ReflectionClass($this);
+        $nameProperty = $reflection->getProperty('name');
+        $nameProperty->setAccessible(true);
+        $nameProperty->setValue($this, $name);
         return $this;
     }
 
@@ -26,7 +33,11 @@ abstract class Command implements IsCommand
      */
     protected function setDesc(string $desc): static
     {
-        $this->desc = $desc;
+        // 使用反射绕过readonly限制来设置属性值
+        $reflection = new \ReflectionClass($this);
+        $descProperty = $reflection->getProperty('desc');
+        $descProperty->setAccessible(true);
+        $descProperty->setValue($this, $desc);
         return $this;
     }
 
@@ -35,7 +46,11 @@ abstract class Command implements IsCommand
      */
     protected function setUsage(string $usage): static
     {
-        $this->usage = $usage;
+        // 使用反射绕过readonly限制来设置属性值
+        $reflection = new \ReflectionClass($this);
+        $usageProperty = $reflection->getProperty('usage');
+        $usageProperty->setAccessible(true);
+        $usageProperty->setValue($this, $usage);
         return $this;
     }
 

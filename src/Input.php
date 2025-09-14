@@ -6,13 +6,25 @@ namespace Nova\Console;
 
 use Nova\Console\Contract\IsInput;
 
+/**
+ * @phpstan-type ArgValue string
+ * @phpstan-type FlagValue bool
+ * @phpstan-type OptionValue string
+ */
 class Input implements IsInput
 {
+    /** @var array<int, ArgValue> */
     protected array $args = [];
+    /** @var array<string, FlagValue> */
     protected array $flags = [];
+    /** @var array<string, OptionValue> */
     protected array $options = [];
+    /** @var array<int, string> */
     protected array $raw = [];
 
+    /**
+     * @param array<int, string> $argv
+     */
     public function __construct(array $argv)
     {
         $this->raw = $argv;
@@ -21,6 +33,8 @@ class Input implements IsInput
 
     /**
      * 解析命令行参数
+     *
+     * @param array<int, string> $argv
      */
     protected function parse(array $argv): void
     {
@@ -115,6 +129,8 @@ class Input implements IsInput
 
     /**
      * 获取原始参数数组
+     *
+     * @return array<int, string>
      */
     public function raw(): array
     {

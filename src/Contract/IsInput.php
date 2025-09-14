@@ -28,6 +28,8 @@ interface IsInput
 
     /**
      * 获取原始参数数组
+     *
+     * @return array<int, string>
      */
     public function raw(): array;
 }

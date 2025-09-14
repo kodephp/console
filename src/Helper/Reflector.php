@@ -16,6 +16,13 @@ class Reflector
      * @template T of object
      * @param class-string<T> $cls
      * @return ReflectionClass<T>
+     * @phpstan-param class-string<T> $cls
+     */
+    /**
+     * @template T of object
+     * @param class-string<T> $cls
+     * @return ReflectionClass<T>
+     * @phpstan-param class-string<T> $cls
      */
     public static function of(string $cls): ReflectionClass
     {
@@ -46,9 +53,13 @@ class Reflector
 
     /**
      * 获取类的构造函数参数
+     *
+     * @param class-string<Command> $cls
+     * @return array<int, \ReflectionParameter>
      */
     public static function getConstructorParameters(string $cls): array
     {
+        /** @var ReflectionClass<Command> $ref */
         $ref = self::of($cls);
         
         if (!$ref->hasMethod('__construct')) {

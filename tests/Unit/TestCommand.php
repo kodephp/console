@@ -12,8 +12,7 @@ class TestCommand extends Command
 {
     public function __construct()
     {
-        $this->setName('test');
-        $this->setDesc('Test command for unit tests');
+        parent::__construct('test', 'Test command for unit tests');
     }
     
     public function fire(Input $in, Output $out): int

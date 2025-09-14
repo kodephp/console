@@ -4,12 +4,19 @@ declare(strict_types=1);
 
 namespace Nova\Console;
 
+/**
+ * @phpstan-type ArgumentDefinition array{required: bool, default: mixed}
+ * @phpstan-type OptionDefinition array{value_required: bool, default: mixed}
+ */
 class Signature
 {
     protected string $name = '';
     protected string $definition;
+    /** @var array<string, ArgumentDefinition> */
     protected array $arguments = [];
+    /** @var array<string, OptionDefinition> */
     protected array $options = [];
+    /** @var array<string, string> */
     protected array $flags = [];
 
     public function __construct(string $definition)
@@ -30,14 +37,17 @@ class Signature
         $definition = $matches[2] ?? '';
         
         if ($definition) {
+            /** @var array<int, string>|false $tokens */
             $tokens = preg_split('/\s+/', $definition);
-            foreach ($tokens as $token) {
-                if (str_starts_with($token, '{')) {
-                    $param = trim($token, '{}');
-                    if (str_starts_with($param, '--')) {
-                        $this->parseOption($param);
-                    } else {
-                        $this->parseArgument($param);
+            if ($tokens !== false) {
+                foreach ($tokens as $token) {
+                    if (str_starts_with($token, '{')) {
+                        $param = trim($token, '{}');
+                        if (str_starts_with($param, '--')) {
+                            $this->parseOption($param);
+                        } else {
+                            $this->parseArgument($param);
+                        }
                     }
                 }
             }
@@ -115,6 +125,8 @@ class Signature
 
     /**
      * 获取参数定义
+     *
+     * @return array<string, ArgumentDefinition>
      */
     public function getArguments(): array
     {
@@ -123,6 +135,8 @@ class Signature
 
     /**
      * 获取选项定义
+     *
+     * @return array<string, OptionDefinition>
      */
     public function getOptions(): array
     {
@@ -131,6 +145,8 @@ class Signature
 
     /**
      * 获取标志定义
+     *
+     * @return array<string, string>
      */
     public function getFlags(): array
     {

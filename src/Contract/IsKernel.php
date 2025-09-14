@@ -17,6 +17,8 @@ interface IsKernel
 
     /**
      * 运行控制台
+     *
+     * @param array<int, string> $argv
      */
     public function boot(array $argv): int;
 

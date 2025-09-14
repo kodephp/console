@@ -13,12 +13,7 @@ class CommandTest extends TestCase
 {
     public function testCommandCreation(): void
     {
-        $command = new class extends Command {
-            public function __construct()
-            {
-                $this->setName('test');
-                $this->setDesc('Test command');
-            }
+        $command = new class ('test', 'Test command') extends Command {
             
             public function fire(Input $in, Output $out): int
             {
