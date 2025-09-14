@@ -1,10 +1,6 @@
 <?php
 
-declare(strict_types=1);
-
-require_once __DIR__ . '/../vendor/autoload.php';
-
-use Nova\Console\Kernel;
+use Kode\Console\Kernel;
 
 // 注册命令
 $kernel = new Kernel();

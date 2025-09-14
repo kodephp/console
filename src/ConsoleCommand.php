@@ -1,12 +1,8 @@
 <?php
 
-declare(strict_types=1);
+namespace Kode\Console;
 
-namespace Nova\Console;
-
-use Attribute;
-
-#[Attribute(Attribute::TARGET_CLASS)]
+#[\Attribute]
 class ConsoleCommand
 {
     public function __construct(

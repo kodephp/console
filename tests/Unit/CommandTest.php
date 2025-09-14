@@ -1,13 +1,11 @@
 <?php
 
-declare(strict_types=1);
+namespace Kode\Console\Tests\Unit;
 
-namespace Nova\Console\Tests\Unit;
-
+use Kode\Console\Command;
+use Kode\Console\Input;
+use Kode\Console\Output;
 use PHPUnit\Framework\TestCase;
-use Nova\Console\Command;
-use Nova\Console\Input;
-use Nova\Console\Output;
 
 class CommandTest extends TestCase
 {

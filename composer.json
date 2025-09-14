@@ -1,13 +1,13 @@
 {
-    "name": "nova/console",
+    "name": "kode/console",
     "description": "健壮、通用的 PHP 控制台组件",
-    "keywords": ["console", "cli", "command", "nova"],
-    "homepage": "https://github.com/novaphp/console",
+    "keywords": ["console", "cli", "command", "kode"],
+    "homepage": "https://github.com/kodephp/console",
     "license": "Apache-2.0",
     "authors": [
         {
-            "name": "NovaPHP Team",
-            "email": "team@novaphp.com"
+            "name": "KodePHP Team",
+            "email": "team@kodephp.com"
         }
     ],
     "require": {
@@ -19,12 +19,13 @@
     },
     "autoload": {
         "psr-4": {
-            "Nova\\Console\\": "src/"
+            "Kode\\Console\\": "src/",
+            "Kode\\Console\\Examples\\": "examples/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "Nova\\Console\\Tests\\": "tests/"
+            "Kode\\Console\\Tests\\": "tests/"
         }
     },
     "scripts": {

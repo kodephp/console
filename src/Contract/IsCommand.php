@@ -1,11 +1,9 @@
 <?php
 
-declare(strict_types=1);
+namespace Kode\Console\Contract;
 
-namespace Nova\Console\Contract;
-
-use Nova\Console\Input;
-use Nova\Console\Output;
+use Kode\Console\Input;
+use Kode\Console\Output;
 
 interface IsCommand
 {

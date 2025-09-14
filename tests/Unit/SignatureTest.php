@@ -1,11 +1,9 @@
 <?php
 
-declare(strict_types=1);
+namespace Kode\Console\Tests\Unit;
 
-namespace Nova\Console\Tests\Unit;
-
+use Kode\Console\Signature;
 use PHPUnit\Framework\TestCase;
-use Nova\Console\Signature;
 
 class SignatureTest extends TestCase
 {

@@ -1,10 +1,8 @@
 <?php
 
-declare(strict_types=1);
+namespace Kode\Console;
 
-namespace Nova\Console;
-
-use Nova\Console\Contract\IsOutput;
+use Kode\Console\Contract\IsOutput;
 
 class Output implements IsOutput
 {

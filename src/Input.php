@@ -1,10 +1,8 @@
 <?php
 
-declare(strict_types=1);
+namespace Kode\Console;
 
-namespace Nova\Console;
-
-use Nova\Console\Contract\IsInput;
+use Kode\Console\Contract\IsInput;
 
 /**
  * @phpstan-type ArgValue string

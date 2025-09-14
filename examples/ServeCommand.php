@@ -1,24 +1,22 @@
 <?php
 
-declare(strict_types=1);
+namespace Kode\Console\Examples;
 
-use Nova\Console\Command;
-use Nova\Console\Input;
-use Nova\Console\Output;
+use Kode\Console\Command;
+use Kode\Console\Input;
+use Kode\Console\Output;
 
 class ServeCommand extends Command
 {
     public function __construct()
     {
-        $this->name = 'serve';
-        $this->desc = 'Start web server';
-        $this->usage = 'serve {app?} {--host=localhost} {--port=8080}';
+        parent::__construct('serve', 'Start web server', 'serve {app?} {--host=localhost} {--port=8080}');
         $this->sig($this->usage);
     }
 
     public function fire(Input $in, Output $out): int
     {
-        $app = $in->arg('app', 'default');
+        $app = $in->arg(1, 'default');
         $host = $in->opt('host') ?? 'localhost';
         $port = $in->opt('port') ?? '8080';
 

@@ -1,11 +1,9 @@
 <?php
 
-declare(strict_types=1);
+namespace Kode\Console;
 
-namespace Nova\Console;
-
-use Nova\Console\Contract\IsKernel;
-use Nova\Console\Helper\Reflector;
+use Kode\Console\Contract\IsKernel;
+use Kode\Console\Helper\Reflector;
 use InvalidArgumentException;
 
 class Kernel implements IsKernel

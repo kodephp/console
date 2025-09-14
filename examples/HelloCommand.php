@@ -1,10 +1,10 @@
 <?php
 
-declare(strict_types=1);
+namespace Kode\Console\Examples;
 
-use Nova\Console\Command;
-use Nova\Console\Input;
-use Nova\Console\Output;
+use Kode\Console\Command;
+use Kode\Console\Input;
+use Kode\Console\Output;
 
 /**
  * 示例命令：显示问候语
@@ -16,16 +16,7 @@ class HelloCommand extends Command
 {
     public function __construct()
     {
-        // 设置命令名称
-        $this->name = 'hello';
-        
-        // 设置命令描述
-        $this->desc = 'Display a greeting message';
-        
-        // 设置命令用法
-        $this->usage = 'hello {name?} {--uppercase}';
-        
-        // 注册命令签名
+        parent::__construct('hello', 'Display a greeting message', 'hello {name?} {--uppercase}');
         $this->sig($this->usage);
     }
 
@@ -39,7 +30,8 @@ class HelloCommand extends Command
     public function fire(Input $in, Output $out): int
     {
         // 获取 name 参数，默认为 'World'
-        $name = $in->arg('name', 'World');
+        // 参数索引从0开始，第0个参数是命令名，第1个参数是第一个实际参数
+        $name = $in->arg(1, 'World');
         
         // 构造问候语
         $greeting = "Hello, {$name}!";

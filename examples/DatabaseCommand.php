@@ -1,10 +1,10 @@
 <?php
 
-declare(strict_types=1);
+namespace Kode\Console\Examples;
 
-use Nova\Console\Command;
-use Nova\Console\Input;
-use Nova\Console\Output;
+use Kode\Console\Command;
+use Kode\Console\Input;
+use Kode\Console\Output;
 
 /**
  * 示例命令：数据库操作命令
@@ -16,16 +16,7 @@ class DatabaseCommand extends Command
 {
     public function __construct()
     {
-        // 设置命令名称
-        $this->name = 'db';
-        
-        // 设置命令描述
-        $this->desc = 'Database operations';
-        
-        // 设置命令用法
-        $this->usage = 'db {operation} {table?} {--host=localhost} {--port=3306} {--database=} {--force}';
-        
-        // 注册命令签名
+        parent::__construct('db', 'Database operations', 'db {operation} {table?} {--host=localhost} {--port=3306} {--database=} {--force}');
         $this->sig($this->usage);
     }
 
@@ -39,14 +30,14 @@ class DatabaseCommand extends Command
     public function fire(Input $in, Output $out): int
     {
         // 获取操作参数
-        $operation = $in->arg('operation');
+        $operation = $in->arg(1);
         
         // 获取表名参数（可选）
-        $table = $in->arg('table');
+        $table = $in->arg(2);
         
         // 获取选项
-        $host = $in->opt('host');
-        $port = $in->opt('port');
+        $host = $in->opt('host') ?? 'localhost';
+        $port = $in->opt('port') ?? '3306';
         $database = $in->opt('database');
         $force = $in->flag('force');
         

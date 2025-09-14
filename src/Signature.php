@@ -1,8 +1,6 @@
 <?php
 
-declare(strict_types=1);
-
-namespace Nova\Console;
+namespace Kode\Console;
 
 /**
  * @phpstan-type ArgumentDefinition array{required: bool, default: mixed}

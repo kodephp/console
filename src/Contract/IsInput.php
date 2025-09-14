@@ -1,8 +1,6 @@
 <?php
 
-declare(strict_types=1);
-
-namespace Nova\Console\Contract;
+namespace Kode\Console\Contract;
 
 interface IsInput
 {

@@ -1,10 +1,8 @@
 <?php
 
-declare(strict_types=1);
+namespace Kode\Console\Contract;
 
-namespace Nova\Console\Contract;
-
-use Nova\Console\Command;
+use Kode\Console\Command;
 
 interface IsKernel
 {

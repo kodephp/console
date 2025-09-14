@@ -1,10 +1,8 @@
 <?php
 
-declare(strict_types=1);
+namespace Kode\Console\Helper;
 
-namespace Nova\Console\Helper;
-
-use Nova\Console\Command;
+use Kode\Console\Command;
 use ReflectionClass;
 use InvalidArgumentException;
 
