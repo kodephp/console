@@ -1,9 +1,9 @@
-# Kode Console
+# kode Console
 
 健壮、通用的 PHP 控制台组件
 
 [![PHP Version](https://img.shields.io/badge/php-^8.1-blue.svg)](https://www.php.net/)
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache2.0-blue.svg)](LICENSE)
 
 ## 简介
 
@@ -39,17 +39,18 @@ class ServeCommand extends Command
 {
     public function __construct()
     {
-        parent::__construct('serve', 'Start web server', 'serve {app?} {--host=localhost} {--port=8080}');
+        $this->name = 'serve';
+        $this->desc = 'Start web server';
+        $this->usage = 'serve {app} {--port=8080}';
         $this->sig($this->usage);
     }
 
     public function fire(Input $in, Output $out): int
     {
-        $app = $in->arg(1, 'default');
-        $host = $in->opt('host') ?? 'localhost';
-        $port = $in->opt('port') ?? '8080';
+        $app = $in->arg('app', 'default');
+        $port = $in->opt('port');
 
-        $out->info("Starting server for {$app} on {$host}:{$port}");
+        $out->info("Starting server for {$app} on :{$port}");
         // 启动逻辑...
 
         return 0; // 成功退出
@@ -80,7 +81,9 @@ class MigrateCommand extends Command
 {
     public function __construct()
     {
-        parent::__construct('migrate', 'Run database migrations', 'migrate {--fresh} {--seed}');
+        $this->name = 'migrate';
+        $this->desc = 'Run database migrations';
+        $this->usage = 'migrate {--fresh} {--seed}';
         $this->sig($this->usage);
     }
 
@@ -113,13 +116,15 @@ class CacheClearCommand extends Command
 {
     public function __construct()
     {
-        parent::__construct('cache:clear', 'Clear application cache', 'cache:clear {store?} {--tags=*}');
+        $this->name = 'cache:clear';
+        $this->desc = 'Clear application cache';
+        $this->usage = 'cache:clear {store?} {--tags=*}';
         $this->sig($this->usage);
     }
 
     public function fire(Input $in, Output $out): int
     {
-        $store = $in->arg(1, 'default');
+        $store = $in->arg('store', 'default');
         $tags = $in->opt('tags');
 
         $out->info("Clearing cache for store: {$store}");
