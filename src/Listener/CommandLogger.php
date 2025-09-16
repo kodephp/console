@@ -15,7 +15,13 @@ class CommandLogger
             json_encode($event->getData())
         );
         
-        // 这里可以写入日志文件
-        file_put_contents('command.log', $logMessage, FILE_APPEND | LOCK_EX);
+        // 确保runtime目录存在
+        $runtimeDir = 'runtime/logs';
+        if (!is_dir($runtimeDir)) {
+            mkdir($runtimeDir, 0755, true);
+        }
+        
+        // 写入日志文件到runtime目录
+        file_put_contents($runtimeDir . '/command.log', $logMessage, FILE_APPEND | LOCK_EX);
     }
 }

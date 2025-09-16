@@ -18,6 +18,20 @@ class HelloCommand extends Command
     {
         parent::__construct('hello', 'Display a greeting message', 'hello {name?} {--uppercase}');
         $this->sig($this->usage);
+        
+        // 添加别名
+        $this->alias(['hi', 'greet']);
+        
+        // 添加示例
+        $this->example('hello', 'Display a greeting message to World');
+        $this->example('hello John', 'Display a greeting message to John');
+        $this->example('hello John --uppercase', 'Display an uppercase greeting message to John');
+        
+        // 设置相关命令
+        $this->related(['serve', 'db:migrate']);
+        
+        // 设置命令组
+        $this->group('general');
     }
 
     /**
@@ -29,9 +43,15 @@ class HelloCommand extends Command
      */
     public function fire(Input $in, Output $out): int
     {
+        // 显示帮助信息
+        if ($in->flag('help')) {
+            $this->showHelp($in, $out);
+            return 0;
+        }
+        
         // 获取 name 参数，默认为 'World'
-        // 参数索引从0开始，第0个参数是命令名，第1个参数是第一个实际参数
-        $name = $in->arg(1, 'World');
+        // 参数索引从0开始，第0个参数是第一个实际参数
+        $name = $in->arg(0, 'World');
         
         // 构造问候语
         $greeting = "Hello, {$name}!";
