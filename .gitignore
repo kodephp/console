@@ -20,6 +20,8 @@ Thumbs.db
 phpcs.xml.dist
 phpunit.xml.dist
 phpunit.xml
+.phpunit.cache
+command.log
 
 # IDE
 .trae/
