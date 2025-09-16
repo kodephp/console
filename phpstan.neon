@@ -1,6 +1,5 @@
 parameters:
     level: 9
     inferPrivatePropertyTypeFromConstructor: true
-    checkGenericClassInNonGenericObjectType: true
     paths:
         - src

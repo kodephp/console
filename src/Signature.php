@@ -35,7 +35,7 @@ class Signature
         $definition = $matches[2] ?? '';
         
         if ($definition) {
-            /** @var array<int, string>|false $tokens */
+            /** @var list<string>|false $tokens */
             $tokens = preg_split('/\s+/', $definition);
             if ($tokens !== false) {
                 foreach ($tokens as $token) {
