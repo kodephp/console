@@ -3,7 +3,8 @@
     "description": "健壮、通用的 PHP 控制台组件",
     "keywords": ["console", "cli", "command", "php81", "framework"],
     "homepage": "https://github.com/kodephp/console",
-    "license": "MIT",
+    "license": "Apache-2.0",
+    "version": "2.1.1",
     "authors": [
         {
             "name": "KodePHP Team",
