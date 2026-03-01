@@ -27,6 +27,8 @@
 - ✅ **可作为依赖被任意框架调用**
 - ✅ **IDE 完整识别支持**（通过 PHPStan 级别 12 + PHPDoc + Attributes）
 - ✅ **支持未来扩展**：协程、多线程、多进程（通过事件钩子预留接口）
+- ✅ **自定义参数扩展**：支持参数类型、验证和默认值
+- ✅ **智能参数解析**：自动类型转换和验证
 
 ---
 
@@ -222,6 +224,8 @@ class Input
     public function flag(string $name): bool;     // --verbose
     public function opt(string $name): mixed;     // --port=8080
     public function raw(): array;                 // 原始 argv
+    public function cast(mixed $value, string $type): mixed; // 类型转换
+    public function validate(string $key, mixed $value, array $rules): bool; // 参数验证
     
     // 交互式输入功能
     public static function ask(string $question, string $default = ''): string;
@@ -260,9 +264,10 @@ class Output
 
 ```php
 // 示例：serve --host=localhost --port=8080 {app?}
-$sig = new Signature('serve {app?} {--host=} {--port=8080} {--secure}');
+// 支持参数类型：{app:string?} {--port:int=8080}
+$sig = new Signature('serve {app:string?} {--host:string=localhost} {--port:int=8080} {--secure:bool}');
 
-// 解析后生成元数据，用于 Input 验证
+// 解析后生成元数据，用于 Input 验证和类型转换
 ```
 
 ---
@@ -284,7 +289,7 @@ class ServeCommand extends Command
 {
     public function __construct()
     {
-        parent::__construct('serve', 'Start web server', 'serve {app?} {--host=localhost} {--port=8080}');
+        parent::__construct('serve', 'Start web server', 'serve {app:string?} {--host:string=localhost} {--port:int=8080} {--secure:bool}');
         $this->sig($this->usage);
         
         // 添加别名
@@ -293,6 +298,7 @@ class ServeCommand extends Command
         // 添加示例
         $this->example('serve', 'Start server in current directory');
         $this->example('serve ./public --host=0.0.0.0 --port=8000', 'Start server with custom host and port');
+        $this->example('serve ./public --secure', 'Start server with HTTPS');
         
         // 设置相关命令
         $this->related(['hello', 'db:migrate']);
@@ -310,9 +316,10 @@ class ServeCommand extends Command
         }
         
         // 获取参数和选项
-        $app = $in->arg(1, getcwd());  // 默认为当前目录
+        $app = $in->arg('app', getcwd());  // 默认为当前目录
         $host = $in->opt('host', 'localhost');
-        $port = $in->opt('port', 8080);
+        $port = $in->cast($in->opt('port', 8080), 'int');
+        $secure = $in->flag('secure');
         
         // 检查应用目录是否存在
         if (!is_dir($app)) {
@@ -325,7 +332,8 @@ class ServeCommand extends Command
         $out->line("Application: {$app}");
         $out->line("Host: {$host}");
         $out->line("Port: {$port}");
-        $out->success("Server started at http://{$host}:{$port}");
+        $out->line("Secure: " . ($secure ? 'Yes' : 'No'));
+        $out->success("Server started at " . ($secure ? 'https' : 'http') . "://{$host}:{$port}");
         $out->line("Press Ctrl+C to stop the server");
         
         // 这里可以添加实际启动服务器的逻辑
@@ -343,7 +351,7 @@ class DatabaseCommand extends Command
         parent::__construct(
             'db', 
             'Database operations', 
-            'db {operation} {table?} {--host=localhost} {--port=3306} {--database=} {--force}'
+            'db {operation:string} {table:string?} {--host:string=localhost} {--port:int=3306} {--database:string=} {--force:bool}'
         );
         $this->sig($this->usage);
         
@@ -371,10 +379,10 @@ class DatabaseCommand extends Command
         }
         
         // 获取参数和选项
-        $operation = $in->arg(1);
-        $table = $in->arg(2);
+        $operation = $in->arg('operation');
+        $table = $in->arg('table');
         $host = $in->opt('host', 'localhost');
-        $port = $in->opt('port', 3306);
+        $port = $in->cast($in->opt('port', 3306), 'int');
         $database = $in->opt('database');
         $force = $in->flag('force');
         

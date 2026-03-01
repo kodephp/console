@@ -3,8 +3,8 @@
 namespace Kode\Console;
 
 /**
- * @phpstan-type ArgumentDefinition array{required: bool, default: mixed}
- * @phpstan-type OptionDefinition array{value_required: bool, default: mixed}
+ * @phpstan-type ArgumentDefinition array{required: bool, default: mixed, type: string}
+ * @phpstan-type OptionDefinition array{value_required: bool, default: mixed, type: string}
  */
 class Signature
 {
@@ -60,6 +60,7 @@ class Signature
         $argument = [
             'required' => true,
             'default' => null,
+            'type' => 'string',
         ];
 
         // 处理可选参数 {argument?}
@@ -68,13 +69,19 @@ class Signature
             $definition = substr($definition, 0, -1);
         }
 
-        // 处理默认值 {argument=default}
-        if (str_contains($definition, '=')) {
-            [$name, $default] = explode('=', $definition, 2);
-            $argument['required'] = false;
-            $argument['default'] = $default;
+        // 处理类型 {argument:string}
+        if (str_contains($definition, ':')) {
+            [$name, $type] = explode(':', $definition, 2);
+            $argument['type'] = $type;
         } else {
             $name = $definition;
+        }
+
+        // 处理默认值 {argument=default} 或 {argument:string=default}
+        if (str_contains($name, '=')) {
+            [$name, $default] = explode('=', $name, 2);
+            $argument['required'] = false;
+            $argument['default'] = $default;
         }
 
         $this->arguments[$name] = $argument;
@@ -88,6 +95,7 @@ class Signature
         $option = [
             'value_required' => false,
             'default' => null,
+            'type' => 'string',
         ];
 
         // 处理带值的选项 {--option=}
@@ -103,6 +111,12 @@ class Signature
         } else {
             // 标志选项 {--option}
             $name = $definition;
+        }
+
+        // 处理类型 {--option:string}
+        if (str_contains($name, ':')) {
+            [$name, $type] = explode(':', $name, 2);
+            $option['type'] = $type;
         }
 
         // 处理 {--option|-o} 格式

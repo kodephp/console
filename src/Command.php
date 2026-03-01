@@ -27,6 +27,11 @@ abstract class Command implements IsCommand
     protected array $related = [];
     
     protected ?string $group = null;
+    
+    /**
+     * @var ?Signature
+     */
+    protected ?Signature $signature = null;
 
     public function __construct(
         string $name = '',        // 命令名，如 "app:serve"
@@ -49,8 +54,7 @@ abstract class Command implements IsCommand
      */
     public function sig(string $def): static
     {
-        // 由于readonly属性不能被修改，我们不执行任何操作
-        // 签名解析逻辑将在 Signature 类中实现
+        $this->signature = new Signature($def);
         return $this;
     }
 
@@ -161,7 +165,30 @@ abstract class Command implements IsCommand
         // 显示签名参数详情
         if (isset($this->signature)) {
             $out->line("\nArguments and Options:");
-            // 这里可以解析签名并显示详细信息
+            
+            // 显示参数
+            $arguments = $this->signature->getArguments();
+            if (!empty($arguments)) {
+                $out->line("Arguments:");
+                foreach ($arguments as $name => $def) {
+                    $label = $def['required'] ? "{$name}" : "{$name}?";
+                    $type = $def['type'] !== 'string' ? " ({$def['type']})" : "";
+                    $default = $def['default'] !== null ? " [default: {$def['default']}]" : "";
+                    $out->line("  {$label}{$type}{$default}");
+                }
+            }
+            
+            // 显示选项
+            $options = $this->signature->getOptions();
+            if (!empty($options)) {
+                $out->line("\nOptions:");
+                foreach ($options as $name => $def) {
+                    $label = "--{$name}";
+                    $type = $def['type'] !== 'string' ? " ({$def['type']})" : "";
+                    $default = $def['default'] !== null ? " [default: {$def['default']}]" : "";
+                    $out->line("  {$label}{$type}{$default}");
+                }
+            }
         }
         
         if (!empty($this->examples)) {
@@ -187,7 +214,30 @@ abstract class Command implements IsCommand
      */
     protected function validateInput(Input $in, Output $out): bool
     {
-        // 这里可以添加输入验证逻辑
+        if (!$this->signature) {
+            return true;
+        }
+
+        $arguments = $this->signature->getArguments();
+        $options = $this->signature->getOptions();
+
+        // 验证参数
+        foreach ($arguments as $name => $def) {
+            $value = $in->arg($name);
+            if ($def['required'] && $value === null) {
+                $out->error("Argument '{$name}' is required.");
+                return false;
+            }
+        }
+
+        // 验证选项
+        foreach ($options as $name => $def) {
+            if ($def['value_required'] && $in->opt($name) === null) {
+                $out->error("Option '--{$name}' requires a value.");
+                return false;
+            }
+        }
+
         return true;
     }
 

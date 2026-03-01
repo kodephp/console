@@ -84,6 +84,56 @@ class Input implements IsInput
     }
 
     /**
+     * 类型转换
+     */
+    public function cast(mixed $value, string $type): mixed
+    {
+        switch (strtolower($type)) {
+            case 'int':
+            case 'integer':
+                return (int)$value;
+            case 'float':
+            case 'double':
+                return (float)$value;
+            case 'bool':
+            case 'boolean':
+                return filter_var($value, FILTER_VALIDATE_BOOLEAN);
+            case 'array':
+                return explode(',', (string)$value);
+            case 'string':
+            default:
+                return (string)$value;
+        }
+    }
+
+    /**
+     * 验证参数
+     */
+    public function validate(string $key, mixed $value, array $rules): bool
+    {
+        foreach ($rules as $rule) {
+            switch ($rule) {
+                case 'required':
+                    if (empty($value)) {
+                        return false;
+                    }
+                    break;
+                case 'numeric':
+                    if (!is_numeric($value)) {
+                        return false;
+                    }
+                    break;
+                case 'boolean':
+                    if (!is_bool($this->cast($value, 'bool'))) {
+                        return false;
+                    }
+                    break;
+            }
+        }
+        return true;
+    }
+
+    /**
      * 询问用户输入
      */
     public static function ask(string $question, string $default = ''): string
