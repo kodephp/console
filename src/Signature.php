@@ -1,22 +1,60 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Kode\Console;
 
 /**
+ * 命令签名解析器
+ * 
+ * 使用 DSL 风格定义命令的参数和选项。
+ * 支持参数类型、默认值、必填/可选等特性。
+ * 
+ * @package Kode\Console
+ * @author KodePHP Team
+ * @since 1.0.0
+ * 
  * @phpstan-type ArgumentDefinition array{required: bool, default: mixed, type: string}
  * @phpstan-type OptionDefinition array{value_required: bool, default: mixed, type: string}
  */
 class Signature
 {
+    /**
+     * 命令名称
+     */
     protected string $name = '';
+    
+    /**
+     * 原始签名定义
+     */
     protected string $definition;
-    /** @var array<string, ArgumentDefinition> */
+    
+    /**
+     * 参数定义列表
+     * 
+     * @var array<string, ArgumentDefinition>
+     */
     protected array $arguments = [];
-    /** @var array<string, OptionDefinition> */
+    
+    /**
+     * 选项定义列表
+     * 
+     * @var array<string, OptionDefinition>
+     */
     protected array $options = [];
-    /** @var array<string, string> */
+    
+    /**
+     * 标志别名映射
+     * 
+     * @var array<string, string>
+     */
     protected array $flags = [];
 
+    /**
+     * 构造函数
+     * 
+     * @param string $definition 签名定义字符串
+     */
     public function __construct(string $definition)
     {
         $this->definition = $definition;
@@ -25,6 +63,14 @@ class Signature
 
     /**
      * 解析命令签名
+     * 
+     * 解析签名定义字符串，提取命令名、参数和选项。
+     * 
+     * 示例：
+     * - `serve {app?} {--port=8080}`
+     * - `migrate {name:string} {--force:bool}`
+     * 
+     * @param string $signature 签名定义字符串
      */
     protected function parse(string $signature): void
     {
@@ -53,7 +99,16 @@ class Signature
     }
 
     /**
-     * 解析参数
+     * 解析参数定义
+     * 
+     * 支持的格式：
+     * - `{name}` - 必填参数
+     * - `{name?}` - 可选参数
+     * - `{name=default}` - 带默认值的参数
+     * - `{name:string}` - 带类型的参数
+     * - `{name:string=default}` - 带类型和默认值的参数
+     * 
+     * @param string $definition 参数定义字符串
      */
     protected function parseArgument(string $definition): void
     {
@@ -88,7 +143,16 @@ class Signature
     }
 
     /**
-     * 解析选项
+     * 解析选项定义
+     * 
+     * 支持的格式：
+     * - `{--option}` - 标志选项
+     * - `{--option=}` - 必填值选项
+     * - `{--option=default}` - 带默认值的选项
+     * - `{--option:string}` - 带类型的选项
+     * - `{--option|-o}` - 带短别名的选项
+     * 
+     * @param string $definition 选项定义字符串
      */
     protected function parseOption(string $definition): void
     {
@@ -136,9 +200,19 @@ class Signature
     }
 
     /**
+     * 获取命令名称
+     * 
+     * @return string 命令名称
+     */
+    public function getName(): string
+    {
+        return $this->name;
+    }
+
+    /**
      * 获取参数定义
-     *
-     * @return array<string, ArgumentDefinition>
+     * 
+     * @return array<string, ArgumentDefinition> 参数定义列表
      */
     public function getArguments(): array
     {
@@ -147,8 +221,8 @@ class Signature
 
     /**
      * 获取选项定义
-     *
-     * @return array<string, OptionDefinition>
+     * 
+     * @return array<string, OptionDefinition> 选项定义列表
      */
     public function getOptions(): array
     {
@@ -156,9 +230,9 @@ class Signature
     }
 
     /**
-     * 获取标志定义
-     *
-     * @return array<string, string>
+     * 获取标志别名映射
+     * 
+     * @return array<string, string> 别名到主名称的映射
      */
     public function getFlags(): array
     {

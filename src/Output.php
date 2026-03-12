@@ -1,29 +1,62 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Kode\Console;
 
 use Kode\Console\Contract\IsOutput;
 
+/**
+ * 输出封装类
+ * 
+ * 提供格式化的控制台输出功能，支持 ANSI 颜色和样式。
+ * 自动检测终端环境，在不支持 ANSI 的环境中降级为纯文本输出。
+ * 
+ * @package Kode\Console
+ * @author KodePHP Team
+ * @since 1.0.0
+ */
 class Output implements IsOutput
 {
+    /**
+     * 是否在 TTY 终端环境中
+     */
     protected bool $isTty;
+    
+    /**
+     * 是否支持 ANSI 颜色
+     */
     protected bool $supportsAnsi;
 
+    /**
+     * 构造函数
+     * 
+     * 自动检测终端环境并设置 ANSI 支持状态。
+     */
     public function __construct()
     {
         $this->isTty = $this->checkTty();
         $this->supportsAnsi = $this->isTty && $this->checkAnsiSupport();
     }
 
+    /**
+     * 检查是否在 TTY 终端环境中
+     * 
+     * @return bool 在 TTY 环境中返回 true，否则返回 false
+     */
     protected function checkTty(): bool
     {
-        // 检查是否在TTY环境中
         if (function_exists('posix_isatty')) {
             return posix_isatty(STDOUT);
         }
-        return true; // 默认假设支持TTY
+        return true;
     }
 
+    /**
+     * 检查是否支持 ANSI 颜色
+     * 
+     * @return bool 支持 ANSI 返回 true，否则返回 false
+     */
     protected function checkAnsiSupport(): bool
     {
         // Windows 10 版本 1511 及以上支持 ANSI
@@ -38,6 +71,12 @@ class Output implements IsOutput
         return true;
     }
 
+    /**
+     * 输出一行文本
+     * 
+     * @param string $text 文本内容
+     * @param string $color 颜色名称（可选）
+     */
     public function line(string $text, string $color = ''): void
     {
         if ($color !== '' && $this->supportsAnsi) {
@@ -47,31 +86,63 @@ class Output implements IsOutput
         }
     }
 
+    /**
+     * 输出信息文本（蓝色）
+     * 
+     * @param string $msg 信息内容
+     */
     public function info(string $msg): void
     {
         $this->line($msg, 'blue');
     }
 
+    /**
+     * 输出警告文本（黄色）
+     * 
+     * @param string $msg 警告内容
+     */
     public function warn(string $msg): void
     {
         $this->line($msg, 'yellow');
     }
 
+    /**
+     * 输出错误文本（红色）
+     * 
+     * @param string $msg 错误内容
+     */
     public function error(string $msg): void
     {
         $this->line($msg, 'red');
     }
 
+    /**
+     * 输出成功文本（绿色）
+     * 
+     * @param string $msg 成功内容
+     */
     public function success(string $msg): void
     {
         $this->line($msg, 'green');
     }
 
+    /**
+     * 输出原始文本（不添加换行）
+     * 
+     * @param string $text 文本内容
+     */
     public function raw(string $text): void
     {
         echo $text;
     }
 
+    /**
+     * 为文本添加颜色
+     * 
+     * @param string $text 文本内容
+     * @param string $color 颜色名称
+     * @return string 带颜色代码的文本
+     */
     protected function colorize(string $text, string $color): string
     {
         $colors = [
@@ -83,6 +154,7 @@ class Output implements IsOutput
             'purple' => '0;35',
             'cyan' => '0;36',
             'white' => '0;37',
+            'bold' => '1;37',
             'bold_red' => '1;31',
             'bold_green' => '1;32',
             'bold_yellow' => '1;33',
@@ -101,30 +173,27 @@ class Output implements IsOutput
 
     /**
      * 带样式的输出
+     * 
+     * @param string $text 文本内容
+     * @param string $style 样式名称（info/success/warn/error）
      */
     public function styled(string $text, string $style = 'info'): void
     {
-        switch ($style) {
-            case 'error':
-                $this->error($text);
-                break;
-            case 'warn':
-                $this->warn($text);
-                break;
-            case 'success':
-                $this->success($text);
-                break;
-            case 'info':
-            default:
-                $this->info($text);
-                break;
-        }
+        match ($style) {
+            'error' => $this->error($text),
+            'warn' => $this->warn($text),
+            'success' => $this->success($text),
+            default => $this->info($text),
+        };
     }
 
     /**
      * 表格输出
-     * @param array<int, array<string, string>> $rows
-     * @param array<string> $headers
+     * 
+     * 以表格形式输出数据。
+     * 
+     * @param array<int, string> $headers 表头
+     * @param array<int, array<string, string>> $rows 数据行
      */
     public function table(array $headers, array $rows): void
     {
@@ -164,9 +233,12 @@ class Output implements IsOutput
 
     /**
      * 进度条输出
+     * 
+     * 显示执行进度。
+     * 
      * @param int $current 当前进度
      * @param int $total 总进度
-     * @param int $width 进度条宽度
+     * @param int $width 进度条宽度（默认 50）
      */
     public function progress(int $current, int $total, int $width = 50): void
     {
@@ -189,8 +261,11 @@ class Output implements IsOutput
     }
 
     /**
-     * JSON输出
-     * @param mixed $data
+     * JSON 格式输出
+     * 
+     * 以 JSON 格式输出数据。
+     * 
+     * @param mixed $data 要输出的数据
      */
     public function json(mixed $data): void
     {

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Kode\Console\Examples;
 
 use Kode\Console\Command;
@@ -7,10 +9,10 @@ use Kode\Console\Input;
 use Kode\Console\Output;
 
 /**
- * 示例命令：启动Web服务器
+ * 示例命令：启动 Web 服务器
  * 
- * 这个命令演示了如何创建一个启动Web服务器的命令，
- * 它支持指定应用目录、主机和端口。
+ * 演示如何创建一个启动开发服务器的命令，
+ * 支持指定应用目录、主机和端口。
  */
 class ServeCommand extends Command
 {
@@ -18,8 +20,8 @@ class ServeCommand extends Command
     {
         parent::__construct(
             'serve', 
-            'Start web server', 
-            'serve {app?} {--host=localhost} {--port=8080}'
+            '启动开发服务器', 
+            'serve {app?} {--host:string=localhost} {--port:int=8080} {--secure:bool}'
         );
         $this->sig($this->usage);
         
@@ -27,8 +29,9 @@ class ServeCommand extends Command
         $this->alias(['server', 'start']);
         
         // 添加示例
-        $this->example('serve', 'Start server in current directory');
-        $this->example('serve ./public --host=0.0.0.0 --port=8000', 'Start server with custom host and port');
+        $this->example('serve', '在当前目录启动服务器');
+        $this->example('serve ./public --host=0.0.0.0 --port=8000', '指定目录、主机和端口启动');
+        $this->example('serve --secure', '启用 HTTPS 模式');
         
         // 设置相关命令
         $this->related(['hello', 'db:migrate']);
@@ -37,13 +40,6 @@ class ServeCommand extends Command
         $this->group('development');
     }
 
-    /**
-     * 执行命令
-     * 
-     * @param Input $in 输入对象
-     * @param Output $out 输出对象
-     * @return int 退出码
-     */
     public function fire(Input $in, Output $out): int
     {
         // 显示帮助信息
@@ -53,28 +49,31 @@ class ServeCommand extends Command
         }
         
         // 获取参数和选项
-        $app = $in->arg(1, getcwd());  // 默认为当前目录
+        $app = $in->arg(0, getcwd());  // 默认为当前目录
         $host = $in->opt('host', 'localhost');
-        $port = $in->opt('port', 8080);
+        $port = $in->cast($in->opt('port', 8080), 'int');
+        $secure = $in->flag('secure');
         
         // 检查应用目录是否存在
         if (!is_dir($app)) {
-            $out->error("Application directory '{$app}' does not exist.");
+            $out->error("应用目录 '{$app}' 不存在。");
             return 1;
         }
         
         // 输出启动信息
-        $out->info("Starting development server...");
-        $out->line("Application: {$app}");
-        $out->line("Host: {$host}");
-        $out->line("Port: {$port}");
-        $out->success("Server started at http://{$host}:{$port}");
-        $out->line("Press Ctrl+C to stop the server");
+        $out->info("正在启动开发服务器...");
+        $out->line("应用目录: {$app}");
+        $out->line("主机: {$host}");
+        $out->line("端口: {$port}");
+        $out->line("安全模式: " . ($secure ? '是' : '否'));
         
-        // 这里可以添加实际启动服务器的逻辑
-        // 例如：system("php -S {$host}:{$port} -t {$app}");
+        $protocol = $secure ? 'https' : 'http';
+        $out->success("服务器已启动: {$protocol}://{$host}:{$port}");
+        $out->line("按 Ctrl+C 停止服务器");
         
-        // 成功退出
+        // 实际启动服务器的代码
+        // passthru("php -S {$host}:{$port} -t {$app}");
+        
         return 0;
     }
 }
