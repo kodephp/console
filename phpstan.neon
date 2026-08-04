@@ -1,5 +1,9 @@
 parameters:
     level: 9
+    checkExplicitMixed: false
     inferPrivatePropertyTypeFromConstructor: true
+    treatPhpDocTypesAsCertain: false
     paths:
         - src
+        - examples
+        - tests

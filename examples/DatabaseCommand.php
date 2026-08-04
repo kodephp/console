@@ -1,189 +1,61 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Kode\Console\Examples;
 
+use Kode\Console\Attribute\AsCommand;
 use Kode\Console\Command;
+use Kode\Console\Enum\ExitCode;
 use Kode\Console\Input;
 use Kode\Console\Output;
 
 /**
- * 示例命令：数据库操作
- * 
- * 这个命令演示了如何创建一个处理多种操作的命令，
- * 它支持迁移、填充、备份和恢复数据库。
+ * 示例：多操作命令
+ *
+ * 演示必填参数校验、枚举退出码与进度条。
  */
-class DatabaseCommand extends Command
+#[AsCommand(
+    name: 'db',
+    description: '数据库操作',
+    usage: 'db {action : migrate|seed|backup|restore} {table? : 目标表} {--dsn= : 数据库连接串} {--force:bool : 跳过确认}',
+    aliases: ['database'],
+    group: 'database',
+)]
+final class DatabaseCommand extends Command
 {
-    public function __construct()
-    {
-        parent::__construct(
-            'db', 
-            'Database operations', 
-            'db {operation} {table?} {--host=localhost} {--port=3306} {--database=} {--force}'
-        );
-        $this->sig($this->usage);
-        
-        // 添加别名
-        $this->alias(['database', 'migrate']);
-        
-        // 添加示例
-        $this->example('db migrate --database=myapp', 'Migrate the myapp database');
-        $this->example('db seed users --force', 'Seed the users table with force mode');
-        $this->example('db backup --host=prod.db.com --port=3307', 'Backup database from production server');
-        
-        // 设置相关命令
-        $this->related(['serve', 'hello']);
-        
-        // 设置命令组
-        $this->group('database');
-    }
+    private const array ACTIONS = ['migrate', 'seed', 'backup', 'restore'];
 
-    /**
-     * 执行命令
-     * 
-     * @param Input $in 输入对象
-     * @param Output $out 输出对象
-     * @return int 退出码
-     */
+    #[\Override]
     public function fire(Input $in, Output $out): int
     {
-        // 显示帮助信息
-        if ($in->flag('help')) {
-            $this->showHelp($in, $out);
-            return 0;
+        $action = (string) $in->arg('action');
+
+        if (!in_array($action, self::ACTIONS, true)) {
+            return $this->fail(
+                $out,
+                "未知操作 '{$action}'，可用操作: " . implode(' / ', self::ACTIONS),
+                ExitCode::InvalidInput,
+            );
         }
-        
-        // 获取参数和选项
-        $operation = $in->arg(0);
-        $table = $in->arg(1);
-        $host = $in->opt('host', 'localhost') ?? 'localhost';
-        $port = $in->opt('port', 3306) ?? 3306;
-        $database = $in->opt('database');
-        $force = $in->flag('force');
-        
-        // 验证必需参数
-        if (!$operation) {
-            $out->error("Operation is required. Available operations: migrate, seed, backup, restore");
-            return 1;
+
+        $table = $in->arg('table');
+        $out->info(sprintf('执行 %s%s', $action, is_string($table) ? " -> {$table}" : ''));
+
+        if ($in->provided('dsn')) {
+            $out->debug('DSN: ' . (string) $in->opt('dsn'));
         }
-        
-        // 根据操作类型执行相应逻辑
-        switch ($operation) {
-            case 'migrate':
-                return $this->migrate($out, $host, $port, $database, $table, $force);
-                
-            case 'seed':
-                return $this->seed($out, $host, $port, $database, $table, $force);
-                
-            case 'backup':
-                return $this->backup($out, $host, $port, $database, $table, $force);
-                
-            case 'restore':
-                return $this->restore($out, $host, $port, $database, $table, $force);
-                
-            default:
-                $out->error("Unknown operation '{$operation}'. Available operations: migrate, seed, backup, restore");
-                return 1;
+
+        if (!$in->flag('force')) {
+            $out->warn('未指定 --force，当前为演练模式。');
         }
-    }
-    
-    /**
-     * 执行迁移操作
-     */
-    private function migrate(Output $out, string $host, int $port, ?string $database, ?string $table, bool $force): int
-    {
-        $out->info("Migrating database...");
-        $out->line("Host: {$host}");
-        $out->line("Port: {$port}");
-        
-        if ($database) {
-            $out->line("Database: {$database}");
+
+        foreach (range(1, 5) as $step) {
+            $out->progress($step, 5, 30, $action);
         }
-        
-        if ($table) {
-            $out->line("Table: {$table}");
-        }
-        
-        if ($force) {
-            $out->warn("Force mode enabled");
-        }
-        
-        $out->success("Database migrated successfully!");
-        return 0;
-    }
-    
-    /**
-     * 执行填充操作
-     */
-    private function seed(Output $out, string $host, int $port, ?string $database, ?string $table, bool $force): int
-    {
-        $out->info("Seeding database...");
-        $out->line("Host: {$host}");
-        $out->line("Port: {$port}");
-        
-        if ($database) {
-            $out->line("Database: {$database}");
-        }
-        
-        if ($table) {
-            $out->line("Table: {$table}");
-        }
-        
-        if ($force) {
-            $out->warn("Force mode enabled");
-        }
-        
-        $out->success("Database seeded successfully!");
-        return 0;
-    }
-    
-    /**
-     * 执行备份操作
-     */
-    private function backup(Output $out, string $host, int $port, ?string $database, ?string $table, bool $force): int
-    {
-        $out->info("Backing up database...");
-        $out->line("Host: {$host}");
-        $out->line("Port: {$port}");
-        
-        if ($database) {
-            $out->line("Database: {$database}");
-        }
-        
-        if ($table) {
-            $out->line("Table: {$table}");
-        }
-        
-        if ($force) {
-            $out->warn("Force mode enabled");
-        }
-        
-        $out->success("Database backed up successfully!");
-        return 0;
-    }
-    
-    /**
-     * 执行恢复操作
-     */
-    private function restore(Output $out, string $host, int $port, ?string $database, ?string $table, bool $force): int
-    {
-        $out->info("Restoring database...");
-        $out->line("Host: {$host}");
-        $out->line("Port: {$port}");
-        
-        if ($database) {
-            $out->line("Database: {$database}");
-        }
-        
-        if ($table) {
-            $out->line("Table: {$table}");
-        }
-        
-        if ($force) {
-            $out->warn("Force mode enabled");
-        }
-        
-        $out->success("Database restored successfully!");
-        return 0;
+
+        $out->success("{$action} 完成。");
+
+        return $this->ok();
     }
 }

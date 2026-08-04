@@ -4,6 +4,8 @@
 # IDE
 /.idea/
 /.vscode/
+.trae/
+*/.cursor
 
 # OS
 .DS_Store
@@ -12,21 +14,16 @@ Thumbs.db
 # Build
 /build/
 
-# Logs
+# 运行时产物（日志、缓存）
 *.log
-
-# PHPUnit
-.phpunit.result.cache
-phpcs.xml.dist
-phpunit.xml.dist
-phpunit.xml
-.phpunit.cache
 command.log
 runtime/
+.phpunit.result.cache
+.phpunit.cache
 
-# IDE
-.trae/
-*/.cursor
-phpcs.xml
+# 本地文件：仅保留在本地，不提交仓库
+.workbuddy
+CHANGELOG.md
+changelog.md
 
 composer.lock

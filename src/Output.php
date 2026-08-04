@@ -5,13 +5,19 @@ declare(strict_types=1);
 namespace Kode\Console;
 
 use Kode\Console\Contract\IsOutput;
+use Kode\Console\Enum\Color;
+use Kode\Console\Enum\Verbosity;
 
 /**
- * 输出封装类
- * 
- * 提供格式化的控制台输出功能，支持 ANSI 颜色和样式。
- * 自动检测终端环境，在不支持 ANSI 的环境中降级为纯文本输出。
- * 
+ * 输出封装
+ *
+ * 特性：
+ * - 正常输出走 STDOUT，警告 / 错误走 STDERR，便于管道与日志分流
+ * - 自动探测终端能力，并遵循 `NO_COLOR` / `FORCE_COLOR` 事实标准
+ * - 支持详细度分级（-q / -v / -vvv）
+ * - 表格按显示宽度对齐，中日韩全角字符不会错位
+ * - 所有写入都通过可注入的流完成，单元测试可直接断言输出内容
+ *
  * @package Kode\Console
  * @author KodePHP Team
  * @since 1.0.0
@@ -19,256 +25,487 @@ use Kode\Console\Contract\IsOutput;
 class Output implements IsOutput
 {
     /**
-     * 是否在 TTY 终端环境中
+     * 标准输出流
+     *
+     * @var resource
      */
-    protected bool $isTty;
-    
-    /**
-     * 是否支持 ANSI 颜色
-     */
-    protected bool $supportsAnsi;
+    protected $stream;
 
     /**
-     * 构造函数
-     * 
-     * 自动检测终端环境并设置 ANSI 支持状态。
+     * 错误输出流
+     *
+     * @var resource
      */
-    public function __construct()
-    {
-        $this->isTty = $this->checkTty();
-        $this->supportsAnsi = $this->isTty && $this->checkAnsiSupport();
+    protected $errorStream;
+
+    /**
+     * 是否输出 ANSI 转义序列
+     */
+    protected bool $decorated;
+
+    /**
+     * 输出详细度
+     */
+    protected Verbosity $verbosity;
+
+    /**
+     * @param resource|null $stream      标准输出流，默认 STDOUT
+     * @param resource|null $errorStream 错误输出流，默认 STDERR
+     * @param bool|null     $decorated   是否着色，null 表示自动探测
+     */
+    public function __construct(
+        mixed $stream = null,
+        mixed $errorStream = null,
+        ?bool $decorated = null,
+        Verbosity $verbosity = Verbosity::Normal,
+    ) {
+        $this->stream = is_resource($stream) ? $stream : self::defaultStream('php://stdout', 'STDOUT');
+        $this->errorStream = is_resource($errorStream) ? $errorStream : self::defaultStream('php://stderr', 'STDERR');
+        $this->decorated = $decorated ?? $this->detectDecoration($this->stream);
+        $this->verbosity = $verbosity;
     }
 
+    // ------------------------------------------------------------------
+    // 环境探测
+    // ------------------------------------------------------------------
+
     /**
-     * 检查是否在 TTY 终端环境中
-     * 
-     * @return bool 在 TTY 环境中返回 true，否则返回 false
+     * 获取默认流，CLI 环境外回退到 php:// 包装器
+     *
+     * @return resource
      */
-    protected function checkTty(): bool
+    private static function defaultStream(string $wrapper, string $constant): mixed
     {
-        if (function_exists('posix_isatty')) {
-            return posix_isatty(STDOUT);
+        if (defined($constant)) {
+            /** @var resource $handle */
+            $handle = constant($constant);
+
+            return $handle;
         }
-        return true;
+
+        $handle = fopen($wrapper, 'wb');
+
+        if ($handle === false) {
+            $handle = fopen('php://memory', 'w+b');
+        }
+
+        /** @var resource $handle */
+        return $handle;
     }
 
     /**
-     * 检查是否支持 ANSI 颜色
-     * 
-     * @return bool 支持 ANSI 返回 true，否则返回 false
+     * 探测是否应当输出颜色
+     *
+     * @param resource $stream
      */
-    protected function checkAnsiSupport(): bool
+    protected function detectDecoration(mixed $stream): bool
     {
-        // Windows 10 版本 1511 及以上支持 ANSI
-        if (PHP_OS_FAMILY === 'Windows') {
-            if (function_exists('sapi_windows_vt100_support')) {
-                return sapi_windows_vt100_support(STDOUT);
-            }
+        if (getenv('NO_COLOR') !== false) {
             return false;
         }
-        
-        // Unix-like 系统通常支持 ANSI
-        return true;
+
+        if (getenv('FORCE_COLOR') !== false) {
+            return true;
+        }
+
+        if (!$this->isTty($stream)) {
+            return false;
+        }
+
+        if (PHP_OS_FAMILY === 'Windows') {
+            if (function_exists('sapi_windows_vt100_support')) {
+                return sapi_windows_vt100_support($stream);
+            }
+
+            return getenv('ANSICON') !== false || getenv('WT_SESSION') !== false;
+        }
+
+        return getenv('TERM') !== 'dumb';
+    }
+
+    /**
+     * 是否为交互式终端
+     *
+     * @param resource $stream
+     */
+    protected function isTty(mixed $stream): bool
+    {
+        if (function_exists('stream_isatty')) {
+            return stream_isatty($stream);
+        }
+
+        if (function_exists('posix_isatty')) {
+            return posix_isatty($stream);
+        }
+
+        return false;
+    }
+
+    // ------------------------------------------------------------------
+    // 配置
+    // ------------------------------------------------------------------
+
+    public function isDecorated(): bool
+    {
+        return $this->decorated;
+    }
+
+    public function setDecorated(bool $decorated): static
+    {
+        $this->decorated = $decorated;
+
+        return $this;
+    }
+
+    public function getVerbosity(): Verbosity
+    {
+        return $this->verbosity;
+    }
+
+    /**
+     * 获取底层标准输出流（主要用于测试断言）
+     *
+     * @return resource
+     */
+    public function getStream(): mixed
+    {
+        return $this->stream;
+    }
+
+    /**
+     * 获取底层错误输出流（主要用于测试断言）
+     *
+     * @return resource
+     */
+    public function getErrorStream(): mixed
+    {
+        return $this->errorStream;
+    }
+
+    public function setVerbosity(Verbosity $verbosity): static
+    {
+        $this->verbosity = $verbosity;
+
+        return $this;
+    }
+
+    public function isQuiet(): bool
+    {
+        return $this->verbosity === Verbosity::Quiet;
+    }
+
+    public function isVerbose(): bool
+    {
+        return $this->verbosity->allows(Verbosity::Verbose);
+    }
+
+    // ------------------------------------------------------------------
+    // 基础输出
+    // ------------------------------------------------------------------
+
+    /**
+     * 写入文本（不换行）
+     */
+    public function write(string $text, Color|string|null $color = null, Verbosity $level = Verbosity::Normal): void
+    {
+        if (!$this->verbosity->allows($level)) {
+            return;
+        }
+
+        fwrite($this->stream, $this->format($text, $color));
     }
 
     /**
      * 输出一行文本
-     * 
-     * @param string $text 文本内容
-     * @param string $color 颜色名称（可选）
      */
-    public function line(string $text, string $color = ''): void
+    public function line(string $text = '', Color|string $color = '', Verbosity $level = Verbosity::Normal): void
     {
-        if ($color !== '' && $this->supportsAnsi) {
-            echo $this->colorize($text, $color) . PHP_EOL;
-        } else {
-            echo $text . PHP_EOL;
-        }
+        $this->write($text . PHP_EOL, $color, $level);
     }
 
     /**
-     * 输出信息文本（蓝色）
-     * 
-     * @param string $msg 信息内容
-     */
-    public function info(string $msg): void
-    {
-        $this->line($msg, 'blue');
-    }
-
-    /**
-     * 输出警告文本（黄色）
-     * 
-     * @param string $msg 警告内容
-     */
-    public function warn(string $msg): void
-    {
-        $this->line($msg, 'yellow');
-    }
-
-    /**
-     * 输出错误文本（红色）
-     * 
-     * @param string $msg 错误内容
-     */
-    public function error(string $msg): void
-    {
-        $this->line($msg, 'red');
-    }
-
-    /**
-     * 输出成功文本（绿色）
-     * 
-     * @param string $msg 成功内容
-     */
-    public function success(string $msg): void
-    {
-        $this->line($msg, 'green');
-    }
-
-    /**
-     * 输出原始文本（不添加换行）
-     * 
-     * @param string $text 文本内容
+     * 输出原始文本（不换行、不着色）
      */
     public function raw(string $text): void
     {
-        echo $text;
-    }
-
-    /**
-     * 为文本添加颜色
-     * 
-     * @param string $text 文本内容
-     * @param string $color 颜色名称
-     * @return string 带颜色代码的文本
-     */
-    protected function colorize(string $text, string $color): string
-    {
-        $colors = [
-            'black' => '0;30',
-            'red' => '0;31',
-            'green' => '0;32',
-            'yellow' => '0;33',
-            'blue' => '0;34',
-            'purple' => '0;35',
-            'cyan' => '0;36',
-            'white' => '0;37',
-            'bold' => '1;37',
-            'bold_red' => '1;31',
-            'bold_green' => '1;32',
-            'bold_yellow' => '1;33',
-            'bold_blue' => '1;34',
-            'bold_purple' => '1;35',
-            'bold_cyan' => '1;36',
-            'bold_white' => '1;37',
-        ];
-
-        if (!isset($colors[$color])) {
-            return $text;
+        if ($this->isQuiet()) {
+            return;
         }
 
-        return "\033[{$colors[$color]}m{$text}\033[0m";
+        fwrite($this->stream, $text);
     }
 
     /**
-     * 带样式的输出
-     * 
-     * @param string $text 文本内容
-     * @param string $style 样式名称（info/success/warn/error）
+     * 输出若干空行
+     */
+    public function newLine(int $count = 1): void
+    {
+        if ($count > 0) {
+            $this->write(str_repeat(PHP_EOL, $count));
+        }
+    }
+
+    /**
+     * 写入错误流
+     */
+    public function writeError(string $text, Color|string|null $color = null): void
+    {
+        fwrite($this->errorStream, $this->format($text, $color));
+    }
+
+    /**
+     * 信息（蓝色）
+     */
+    public function info(string $msg): void
+    {
+        $this->line($msg, Color::Blue);
+    }
+
+    /**
+     * 成功（绿色）
+     */
+    public function success(string $msg): void
+    {
+        $this->line($msg, Color::Green);
+    }
+
+    /**
+     * 提示（青色）
+     */
+    public function comment(string $msg): void
+    {
+        $this->line($msg, Color::Cyan);
+    }
+
+    /**
+     * 调试信息，仅在 -vvv 下输出
+     */
+    public function debug(string $msg): void
+    {
+        $this->line($msg, Color::Gray, Verbosity::Debug);
+    }
+
+    /**
+     * 警告（黄色，写入 STDERR）
+     */
+    public function warn(string $msg): void
+    {
+        if ($this->isQuiet()) {
+            return;
+        }
+
+        $this->writeError($msg . PHP_EOL, Color::Yellow);
+    }
+
+    /**
+     * 错误（红色，写入 STDERR，即便 quiet 也会输出）
+     */
+    public function error(string $msg): void
+    {
+        $this->writeError($msg . PHP_EOL, Color::Red);
+    }
+
+    /**
+     * 按语义样式输出
      */
     public function styled(string $text, string $style = 'info'): void
     {
         match ($style) {
             'error' => $this->error($text),
-            'warn' => $this->warn($text),
+            'warn', 'warning' => $this->warn($text),
             'success' => $this->success($text),
+            'comment' => $this->comment($text),
+            'debug' => $this->debug($text),
             default => $this->info($text),
         };
     }
 
     /**
+     * 标题块
+     */
+    public function title(string $text): void
+    {
+        $this->line($text, Color::BoldCyan);
+        $this->line(str_repeat('=', max(4, $this->width($text))), Color::Cyan);
+    }
+
+    /**
+     * 小节标题
+     */
+    public function section(string $text): void
+    {
+        $this->newLine();
+        $this->line($text, Color::Bold);
+        $this->line(str_repeat('-', max(4, $this->width($text))), Color::Gray);
+    }
+
+    /**
+     * 无序列表
+     *
+     * @param array<int, string> $items
+     */
+    public function listing(array $items, string $bullet = '•'): void
+    {
+        foreach ($items as $item) {
+            $this->line("  {$bullet} {$item}");
+        }
+    }
+
+    /**
+     * 为文本套上颜色
+     */
+    public function format(string $text, Color|string|null $color = null): string
+    {
+        $resolved = Color::resolve($color);
+
+        if ($resolved === null || !$this->decorated) {
+            return $text;
+        }
+
+        return $resolved->wrap($text);
+    }
+
+    // ------------------------------------------------------------------
+    // 复合输出
+    // ------------------------------------------------------------------
+
+    /**
      * 表格输出
-     * 
-     * 以表格形式输出数据。
-     * 
-     * @param array<int, string> $headers 表头
-     * @param array<int, array<string, string>> $rows 数据行
+     *
+     * 数据行既可用表头做键，也可使用与表头同序的列表。
+     *
+     * @param array<int, string>                                     $headers
+     * @param array<int, array<array-key, scalar|\Stringable|null>> $rows
      */
     public function table(array $headers, array $rows): void
     {
-        // 计算每列的最大宽度
-        $columnWidths = array_map('strlen', $headers);
-        
+        $headers = array_values($headers);
+        $columns = count($headers);
+
+        if ($columns === 0) {
+            return;
+        }
+
+        $matrix = [];
+
         foreach ($rows as $row) {
-            foreach (array_keys($headers) as $i) {
-                $value = $row[$headers[$i]] ?? '';
-                $columnWidths[$i] = max($columnWidths[$i], strlen($value));
+            $line = [];
+
+            for ($i = 0; $i < $columns; $i++) {
+                $value = $row[$headers[$i]] ?? $row[$i] ?? '';
+                $line[] = (string) $value;
+            }
+
+            $matrix[] = $line;
+        }
+
+        $widths = [];
+
+        for ($i = 0; $i < $columns; $i++) {
+            $widths[$i] = $this->width($headers[$i]);
+
+            foreach ($matrix as $line) {
+                $widths[$i] = max($widths[$i], $this->width($line[$i]));
             }
         }
-        
-        // 输出表头
+
+        $separator = '+';
         $headerLine = '|';
-        $separatorLine = '|';
-        foreach (array_keys($headers) as $i) {
-            $header = str_pad($headers[$i], $columnWidths[$i], ' ', STR_PAD_BOTH);
-            $headerLine .= " {$header} |";
-            $separatorLine .= str_repeat('-', $columnWidths[$i] + 2) . '|';
+
+        for ($i = 0; $i < $columns; $i++) {
+            $separator .= str_repeat('-', $widths[$i] + 2) . '+';
+            $headerLine .= ' ' . $this->pad($headers[$i], $widths[$i]) . ' |';
         }
-        
-        $this->line($headerLine);
-        $this->line($separatorLine);
-        
-        // 输出数据行
-        foreach ($rows as $row) {
-            $line = '|';
-            foreach (array_keys($headers) as $i) {
-                $value = $row[$headers[$i]] ?? '';
-                $value = str_pad($value, $columnWidths[$i], ' ', STR_PAD_RIGHT);
-                $line .= " {$value} |";
+
+        $this->line($separator);
+        $this->line($headerLine, Color::Bold);
+        $this->line($separator);
+
+        foreach ($matrix as $line) {
+            $rendered = '|';
+
+            for ($i = 0; $i < $columns; $i++) {
+                $rendered .= ' ' . $this->pad($line[$i], $widths[$i]) . ' |';
             }
-            $this->line($line);
+
+            $this->line($rendered);
         }
+
+        $this->line($separator);
     }
 
     /**
-     * 进度条输出
-     * 
-     * 显示执行进度。
-     * 
-     * @param int $current 当前进度
-     * @param int $total 总进度
-     * @param int $width 进度条宽度（默认 50）
+     * 进度条
      */
-    public function progress(int $current, int $total, int $width = 50): void
+    public function progress(int $current, int $total, int $width = 40, string $label = ''): void
     {
-        if ($total <= 0) {
+        if ($total <= 0 || $this->isQuiet()) {
             return;
         }
-        
-        $percent = min(100, max(0, intval(($current / $total) * 100)));
-        $barLength = intval(($percent / 100) * $width);
-        $bar = str_repeat('=', $barLength);
-        $empty = str_repeat(' ', $width - $barLength);
-        
-        $this->raw("\r[{$bar}{$empty}] {$percent}% ({$current}/{$total})");
-        
+
+        $current = max(0, min($current, $total));
+        $percent = (int) floor($current / $total * 100);
+        $filled = (int) floor($percent / 100 * $width);
+
+        $bar = str_repeat('=', $filled);
+
+        if ($filled < $width) {
+            $bar .= '>' . str_repeat(' ', max(0, $width - $filled - 1));
+        }
+
+        $suffix = $label === '' ? '' : " {$label}";
+
+        $this->raw(sprintf("\r[%s] %3d%% (%d/%d)%s", $bar, $percent, $current, $total, $suffix));
+
         if ($current >= $total) {
             $this->raw(PHP_EOL);
         }
-        
-        flush();
     }
 
     /**
-     * JSON 格式输出
-     * 
-     * 以 JSON 格式输出数据。
-     * 
-     * @param mixed $data 要输出的数据
+     * JSON 输出
      */
-    public function json(mixed $data): void
+    public function json(mixed $data, int $flags = JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES): void
     {
-        echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . PHP_EOL;
+        $encoded = json_encode($data, $flags);
+
+        $this->line($encoded === false ? '{}' : $encoded);
+    }
+
+    // ------------------------------------------------------------------
+    // 工具
+    // ------------------------------------------------------------------
+
+    /**
+     * 计算文本显示宽度（全角字符按 2 列计）
+     */
+    protected function width(string $text): int
+    {
+        if (function_exists('mb_strwidth')) {
+            return mb_strwidth($text, 'UTF-8');
+        }
+
+        $chars = preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY);
+
+        if ($chars === false) {
+            return strlen($text);
+        }
+
+        $width = 0;
+
+        foreach ($chars as $char) {
+            // 3 字节及以上的 UTF-8 字符（CJK、全角标点、emoji）按 2 列计算
+            $width += strlen($char) >= 3 ? 2 : 1;
+        }
+
+        return $width;
+    }
+
+    /**
+     * 按显示宽度右侧补齐
+     */
+    protected function pad(string $text, int $width): string
+    {
+        return $text . str_repeat(' ', max(0, $width - $this->width($text)));
     }
 }

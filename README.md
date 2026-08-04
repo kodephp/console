@@ -2,22 +2,23 @@
 
 > **健壮、通用的 PHP 控制台组件**
 
-[![PHP Version](https://img.shields.io/badge/PHP-%3E%3D8.1-8892BF.svg)](https://php.net/)
+[![PHP Version](https://img.shields.io/badge/PHP-%3E%3D8.3-8892BF.svg)](https://php.net/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
 
 ## 📦 简介
 
-`kode/console` 是一个专为现代 PHP 应用设计的**通用控制台工具包**，采用 PHP 8.1+ 最新特性，提供轻量、解耦、可扩展的命令行开发体验。
+`kode/console` 是一个专为现代 PHP 应用设计的**通用控制台工具包**，基于 PHP 8.3+ 现代特性构建，提供轻量、解耦、可扩展的命令行开发体验。
 
 ### ✨ 特性
 
-- ✅ **PHP 8.1+ 原生支持** - 使用 `readonly`、`match`、命名参数等现代特性
-- ✅ **命名简洁无冲突** - 避免与 PHP 原生函数/类重名
-- ✅ **类型安全** - 支持协变、逆变、泛型、`readonly`
-- ✅ **自定义参数扩展** - 支持参数类型、验证和默认值
-- ✅ **智能参数解析** - 自动类型转换和验证
-- ✅ **框架无关** - 可被 Laravel、Symfony、ThinkPHP 等任意框架集成
-- ✅ **IDE 完整支持** - 通过 PHPStan 级别 9 + PHPDoc
+- ✅ **PHP 8.3+ 原生支持** — 使用 `enum`、`#[Attribute]`、`#[Override]`、`json_validate()`、类型化类常量、`hrtime()` 等现代特性
+- ✅ **两种命令定义方式** — 构造函数式与声明式 `#[AsCommand]` 注解，任选其一
+- ✅ **类型安全** — PHPStan 级别 9 静态分析零错误，全量单元测试覆盖
+- ✅ **智能参数解析** — 位置参数命名绑定、短选项别名、类型自动转换、默认值填充、`--` 终止符、负数识别
+- ✅ **丰富的输入校验** — `required` / `numeric` / `int` / `min` / `max` / `in` / `regex` 规则
+- ✅ **框架无关** — 可被 Laravel、Symfony、ThinkPHP 等任意框架集成
+- ✅ **完整 I/O** — STDOUT/STDERR 分流、ANSI 装饰探测、详细度分级、CJK 宽字符表格对齐
+- ✅ **可观测性** — 事件系统（支持 `command.*` 通配监听）、中间件链、耗时统计、JSON Lines 日志
 
 ## 📦 安装
 
@@ -27,7 +28,7 @@ composer require kode/console
 
 ## 🚀 快速开始
 
-### 创建命令
+### 方式一：构造函数式
 
 ```php
 <?php
@@ -36,36 +37,66 @@ use Kode\Console\Command;
 use Kode\Console\Input;
 use Kode\Console\Output;
 
-class HelloCommand extends Command
+final class HelloCommand extends Command
 {
     public function __construct()
     {
         parent::__construct(
-            'hello',                           // 命令名
-            '输出问候语',                       // 描述
-            'hello {name?} {--upper:bool}'    // 签名
+            'hello',                        // 命令名
+            '输出问候语',                    // 描述
+            'hello {name?} {--upper:bool}'  // 签名 DSL
         );
-        
-        $this->sig($this->usage);
     }
 
+    #[\Override]
     public function fire(Input $in, Output $out): int
     {
-        $name = $in->arg(0, 'World');
-        $upper = $in->flag('upper');
-        
+        $name = $in->arg('name', 'World');
         $greeting = "Hello, {$name}!";
-        
-        if ($upper) {
+
+        if ($in->flag('upper')) {
             $greeting = strtoupper($greeting);
         }
-        
+
         $out->success($greeting);
-        
-        return 0; // 返回 0 表示成功
+
+        return $this->ok(); // 便捷成功返回（等价于 return 0）
     }
 }
 ```
+
+### 方式二：声明式 `#[AsCommand]`（推荐）
+
+只要签名 DSL 出现在 `usage` 中，即可省去构造函数：
+
+```php
+<?php
+
+use Kode\Console\Attribute\AsCommand;
+use Kode\Console\Command;
+use Kode\Console\Input;
+use Kode\Console\Output;
+
+#[AsCommand(
+    name: 'hello',
+    description: '输出问候语',
+    usage: 'hello {name?} {--upper:bool}',
+    aliases: ['hi', 'greet'],
+    group: 'general',
+)]
+final class HelloCommand extends Command
+{
+    #[\Override]
+    public function fire(Input $in, Output $out): int
+    {
+        $out->success("Hello, {$in->arg('name', 'World')}!");
+
+        return $this->ok();
+    }
+}
+```
+
+> 若同时提供构造函数与注解，**注解优先**；构造函数中传入的 `$name` / `$desc` / `$usage` 仅在注解缺失时生效。
 
 ### 运行命令
 
@@ -76,10 +107,10 @@ require __DIR__ . '/vendor/autoload.php';
 
 use Kode\Console\Kernel;
 
-$kernel = new Kernel();
+$kernel = new Kernel('My App', '1.0.0');
 $kernel->add(HelloCommand::class);
 
-exit($kernel->boot($argv));
+exit($kernel->run($argv));
 ```
 
 ```bash
@@ -88,79 +119,81 @@ php console.php hello John
 
 php console.php hello --upper
 # 输出: HELLO, WORLD!
+
+php console.php list        # 列出全部命令
+php console.php hello --help # 命令帮助
+php console.php --version    # 版本号
 ```
 
 ## 📖 详细文档
 
 ### 命令签名 DSL
 
-使用签名 DSL 定义命令的参数和选项：
+一行 DSL 同时描述命令名、位置参数与选项：
 
 ```
-command {arg1} {arg2?} {--option=default} {--flag:bool}
+app:serve {root?} {files*} {--host=127.0.0.1} {--port|-p:int=8080} {--secure:bool} {--tag : 备注}
 ```
 
-#### 参数定义
+#### 位置参数
 
 | 格式 | 说明 |
 |------|------|
 | `{name}` | 必填参数 |
 | `{name?}` | 可选参数 |
-| `{name=default}` | 带默认值的参数 |
-| `{name:string}` | 带类型的参数 |
-| `{name:int=100}` | 带类型和默认值的参数 |
+| `{name=default}` | 带默认值（隐含可选） |
+| `{name:int}` | 带类型 |
+| `{name:int=100}` | 带类型 + 默认值 |
+| `{files*}` | 可变参数，收集其后全部位置参数 |
+| `{name : 描述}` | 追加帮助说明（空格 + 冒号 + 空格分隔） |
 
-#### 选项定义
+#### 选项
 
 | 格式 | 说明 |
 |------|------|
 | `{--flag}` | 布尔标志 |
-| `{--option=}` | 必填值选项 |
-| `{--option=default}` | 带默认值的选项 |
-| `{--option:int}` | 带类型的选项 |
-| `{--option\|-o}` | 带短别名的选项 |
+| `{--opt=}` | 一旦使用就必须带值 |
+| `{--opt=default}` | 带默认值的选项 |
+| `{--opt:int}` | 带类型的选项 |
+| `{--opt\|-o:int=8080}` | 短别名 + 类型 + 默认值（长短名顺序任意） |
 
 #### 支持的类型
 
-- `string` - 字符串（默认）
-- `int` / `integer` - 整数
-- `float` / `double` - 浮点数
-- `bool` / `boolean` - 布尔值
-- `array` - 数组（逗号分隔）
+- `string` — 字符串（默认）
+- `int` / `integer` — 整数
+- `float` / `double` / `number` — 浮点数
+- `bool` / `boolean` — 布尔值（识别 `1/true/yes/on` 等）
+- `array` / `list` / `csv` — 数组（逗号分隔）
+- `json` — JSON（依赖 PHP 8.3 的 `json_validate` 校验，非法 JSON 返回 `null`）
 
 ### 输入处理
 
 ```php
-// 获取位置参数
+// 获取位置参数（可按下标或按名称）
 $name = $in->arg(0, 'default');
+$name = $in->arg('name', 'default');
 
-// 获取选项值
+// 获取选项值（短别名自动归一化到长名）
 $port = $in->opt('port');
 
-// 检查标志
+// 检查标志 / 是否显式提供
 $verbose = $in->flag('v');
+$hasPort = $in->provided('port');
 
 // 类型转换
 $port = $in->cast($in->opt('port'), 'int');
 
-// 参数验证
-$valid = $in->validate('port', $port, ['required', 'numeric']);
+// 参数验证（规则：required / numeric / int / min / max / in / regex）
+$valid = $in->validate('port', $port, ['required', 'numeric', 'min:1', 'max:65535']);
 ```
 
 ### 交互式输入
 
 ```php
-// 询问用户输入
-$name = Input::ask('请输入名称', '默认名称');
-
-// 确认操作
-if (Input::confirm('确定要删除吗？', false)) {
-    // 执行删除
-}
-
-// 选择选项
+$name   = Input::ask('请输入名称', '默认名称');
+$confirm = Input::confirm('确定要删除吗？', false);
 $choice = Input::choice('请选择环境', [
-    'dev' => '开发环境',
+    'dev'  => '开发环境',
     'prod' => '生产环境',
 ], 'dev');
 ```
@@ -168,27 +201,27 @@ $choice = Input::choice('请选择环境', [
 ### 输出格式化
 
 ```php
-// 基础输出
 $out->line('普通文本');
-$out->info('信息文本');
-$out->warn('警告文本');
-$out->error('错误文本');
-$out->success('成功文本');
+$out->info('信息文本');   // 蓝
+$out->success('成功文本'); // 绿
+$out->comment('提示文本'); // 青
+$out->warn('警告文本');    // 黄，写 STDERR
+$out->error('错误文本');    // 红，写 STDERR
 
-// 带颜色输出
+// 带颜色（颜色名或别名：purple→magenta、grey→gray 等）
 $out->line('红色文本', 'red');
 $out->line('加粗文本', 'bold');
 
-// 表格输出
+// 表格（CJK 全角字符按 2 列对齐）
 $out->table(['ID', '名称', '状态'], [
     ['ID' => 1, '名称' => '张三', '状态' => '活跃'],
     ['ID' => 2, '名称' => '李四', '状态' => '离线'],
 ]);
 
 // 进度条
-for ($i = 0; $i <= 100; $i++) {
+for ($i = 0; $i <= 100; $i += 10) {
     $out->progress($i, 100);
-    usleep(50000);
+    usleep(20000);
 }
 
 // JSON 输出
@@ -200,7 +233,6 @@ $out->json(['status' => 'ok', 'data' => $result]);
 ```php
 use Kode\Console\CommandGroup;
 
-// 创建命令组
 $databaseGroup = new CommandGroup('database', '数据库操作');
 $databaseGroup->addCommand(new MigrateCommand());
 $databaseGroup->addCommand(new SeedCommand());
@@ -213,17 +245,16 @@ $kernel->addGroup($databaseGroup);
 ```php
 use Kode\Console\Contract\IsMiddleware;
 
-class TimingMiddleware implements IsMiddleware
+final class TimingMiddleware implements IsMiddleware
 {
+    #[\Override]
     public function handle(Input $in, Output $out, callable $next): int
     {
-        $start = microtime(true);
-        
+        $start = hrtime(true);
         $result = $next($in, $out);
-        
-        $duration = round((microtime(true) - $start) * 1000, 2);
-        $out->line("\n执行时间: {$duration}ms", 'gray');
-        
+        $ms = (hrtime(true) - $start) / 1_000_000;
+        $out->debug(sprintf('耗时 %.2f ms', $ms));
+
         return $result;
     }
 }
@@ -234,41 +265,36 @@ $kernel->addMiddleware(new TimingMiddleware());
 ### 事件系统
 
 ```php
-use Kode\Console\EventManager;
 use Kode\Console\Event;
+use Kode\Console\EventManager;
 
 $eventManager = new EventManager();
 
-// 监听事件
-$eventManager->listen('command.executing', function (Event $event) {
-    echo "即将执行: {$event->data['command']->name}\n";
+// 通配监听所有 command.* 事件
+$eventManager->listen('command.*', function (Event $event): void {
+    echo "事件: {$event->getName()}\n";
 });
 
 $kernel->setEventManager($eventManager);
 ```
 
-### 命令别名和示例
+内置事件：`kernel.booting` / `kernel.terminated` / `command.executing` / `command.executed` / `command.error`。
+
+### 命令别名与示例
 
 ```php
-class ServeCommand extends Command
+#[AsCommand(name: 'serve', group: 'development', aliases: ['server', 'start'])]
+final class ServeCommand extends Command
 {
-    public function __construct()
+    #[\Override]
+    public function fire(Input $in, Output $out): int
     {
-        parent::__construct('serve', '启动开发服务器', 'serve {port?} {--host=localhost}');
-        $this->sig($this->usage);
-        
-        // 添加别名
-        $this->alias(['server', 'start']);
-        
-        // 添加示例
         $this->example('serve', '在当前目录启动服务器');
         $this->example('serve 8080 --host=0.0.0.0', '指定端口和主机启动');
-        
-        // 设置相关命令
         $this->related(['migrate', 'seed']);
-        
-        // 设置分组
-        $this->group('development');
+
+        // ...
+        return $this->ok();
     }
 }
 ```
@@ -278,27 +304,21 @@ class ServeCommand extends Command
 ```
 kode/console
 ├── Command.php             # 命令基类
-├── Kernel.php              # 控制台内核
+├── Kernel.php              # 控制台内核（注册 / 分发 / 中间件 / 异常兜底）
 ├── Input.php               # 输入解析器
-├── Output.php              # 输出封装
-├── Signature.php           # 签名解析器
-├── Event.php               # 事件类
-├── EventManager.php        # 事件管理器
+├── Output.php              # 输出封装（流可注入，便于测试）
+├── Signature.php           # 签名 DSL 解析器
+├── Event.php               # 不可变事件对象
+├── EventManager.php        # 事件管理器（支持通配监听）
 ├── CommandGroup.php        # 命令分组
-├── Contract/               # 接口定义
-│   ├── IsCommand.php
-│   ├── IsInput.php
-│   ├── IsOutput.php
-│   ├── IsKernel.php
-│   ├── IsEvent.php
-│   ├── IsEventManager.php
-│   └── IsMiddleware.php
-├── Helper/                 # 工具类
-│   └── Reflector.php
-├── Middleware/             # 中间件
-│   └── LoggingMiddleware.php
-└── Listener/               # 监听器
-    └── CommandLogger.php
+├── Attribute/              # #[AsCommand] 声明式注解
+├── Definition/             # Argument / Option 不可变值对象
+├── Enum/                   # ArgType / Color / ExitCode / Verbosity
+├── Exception/              # ConsoleException / CommandNotFoundException / InvalidCommandException
+├── Contract/               # 接口定义（IsCommand / IsInput / IsOutput / IsKernel / IsEvent / IsEventManager / IsMiddleware）
+├── Helper/                 # Reflector（注解缓存 + 实例化）
+├── Middleware/             # LoggingMiddleware（耗时统计）
+└── Listener/               # CommandLogger（JSON Lines 日志）
 ```
 
 ## 📋 API 参考
@@ -307,60 +327,74 @@ kode/console
 
 | 方法 | 说明 |
 |------|------|
-| `fire(Input, Output): int` | 执行命令（抽象方法） |
+| `fire(Input, Output): int` | 执行命令（抽象方法，需 `#[\Override]`） |
 | `sig(string): static` | 注册命令签名 |
-| `alias(array): static` | 设置命令别名 |
+| `about(string): static` | 设置描述 |
+| `alias(array\|string): static` | 设置命令别名 |
 | `example(string, string): static` | 添加使用示例 |
 | `related(array): static` | 设置相关命令 |
-| `group(string): static` | 设置命令分组 |
+| `group(?string): static` | 设置命令分组 |
+| `hidden(bool): static` | 在命令列表中隐藏 |
+| `validate(Input, Output): bool` | 执行前自动校验（必填 / 必带值选项） |
 | `showHelp(Input, Output): void` | 显示帮助信息 |
+| `ok(): int` | 返回成功退出码 `0` |
+| `fail(Output, string, int\|ExitCode): int` | 输出错误并返回退出码（默认 `1`） |
 
 ### Input 类
 
 | 方法 | 说明 |
 |------|------|
-| `arg(string\|int, mixed): mixed` | 获取参数值 |
-| `opt(string): mixed` | 获取选项值 |
+| `arg(string\|int, mixed): mixed` | 获取参数值（下标或名称） |
+| `opt(string, mixed): mixed` | 获取选项值 |
 | `flag(string): bool` | 检查标志是否存在 |
-| `has(string): bool` | 检查参数是否存在 |
-| `cast(mixed, string): mixed` | 类型转换 |
+| `has(string\|int): bool` | 检查参数 / 选项 / 标志是否存在 |
+| `provided(string): bool` | 选项是否由用户显式提供（区别于默认值） |
+| `cast(mixed, string\|ArgType): mixed` | 类型转换 |
 | `validate(string, mixed, array): bool` | 参数验证 |
-| `ask(string, string): string` | 询问用户输入 |
-| `confirm(string, bool): bool` | 确认操作 |
-| `choice(string, array, mixed): mixed` | 选择选项 |
+| `ask / confirm / choice` | 交互式输入（可注入流，便于测试） |
 
 ### Output 类
 
 | 方法 | 说明 |
 |------|------|
-| `line(string, string): void` | 输出一行文本 |
-| `info(string): void` | 输出信息（蓝色） |
-| `warn(string): void` | 输出警告（黄色） |
-| `error(string): void` | 输出错误（红色） |
-| `success(string): void` | 输出成功（绿色） |
-| `raw(string): void` | 输出原始文本 |
-| `styled(string, string): void` | 带样式输出 |
-| `table(array, array): void` | 表格输出 |
-| `progress(int, int, int): void` | 进度条输出 |
-| `json(mixed): void` | JSON 输出 |
+| `line / write / raw` | 基础输出（write 可指定详细度级别） |
+| `info / success / comment / warn / error / debug` | 语义化输出 |
+| `styled(string, string)` | 按样式名输出 |
+| `title / section / listing` | 结构化文本 |
+| `table(array, array)` | 表格输出（CJK 对齐） |
+| `progress(int, int, int, string)` | 进度条 |
+| `json(mixed)` | JSON 输出 |
+| `getStream() / getErrorStream()` | 获取底层流（主要用于测试断言） |
 
 ### Kernel 类
 
 | 方法 | 说明 |
 |------|------|
-| `add(string): static` | 注册命令 |
+| `add(string): static` / `addMany(array): static` | 注册命令类 |
+| `addCommand(Command): static` | 注册命令实例 |
 | `alias(string, string): static` | 添加命令别名 |
 | `addGroup(CommandGroup): static` | 添加命令组 |
 | `addMiddleware(IsMiddleware): static` | 添加中间件 |
 | `setEventManager(IsEventManager): static` | 设置事件管理器 |
-| `boot(array): int` | 运行控制台 |
-| `all(): array` | 获取所有命令 |
+| `setOutput(Output): static` | 注入输出（测试场景） |
+| `run(?array): int` / `boot(array): int` | 运行控制台 |
+| `find(string): ?Command` / `resolve(string): Command` | 查找 / 解析命令（含拼写建议） |
+| `has(string): bool` / `all(): array` / `groups(): array` | 查询已注册命令 |
+
+### 枚举
+
+| 枚举 | 说明 |
+|------|------|
+| `ExitCode` | `Success=0` / `Failure=1` / `InvalidInput=2` / `NotFound=127` |
+| `Verbosity` | `Quiet` / `Normal` / `Verbose` / `Debug` |
+| `ArgType` | `String` / `Int` / `Float` / `Bool` / `Array` / `Json`（`parse()` 兼容别名） |
+| `Color` | 完整 ANSI 颜色 / 样式（`resolve()` 兼容 `purple`→`magenta` 等别名） |
 
 ## 📝 开发
 
 ### 环境要求
 
-- PHP >= 8.1
+- PHP >= 8.3
 - Composer 2.x
 
 ### 安装依赖
@@ -369,10 +403,12 @@ kode/console
 composer install
 ```
 
-### 静态分析
+### 静态分析与测试
 
 ```bash
-composer analyse
+composer analyse   # PHPStan 级别 9
+composer test      # PHPUnit 12
+composer check     # 先分析后测试
 ```
 
 ## 📄 许可证

@@ -1,17 +1,30 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Kode\Console\Contract;
 
 use Kode\Console\Command;
 
+/**
+ * 内核契约
+ *
+ * @package Kode\Console
+ * @since 1.0.0
+ */
 interface IsKernel
 {
     /**
-     * 注册命令
+     * 注册命令类
      *
      * @param class-string<Command> $cls
      */
     public function add(string $cls): static;
+
+    /**
+     * 注册命令实例
+     */
+    public function addCommand(Command $command): static;
 
     /**
      * 运行控制台
@@ -21,9 +34,14 @@ interface IsKernel
     public function boot(array $argv): int;
 
     /**
-     * 获取所有命令
-     *
-     * @return iterable<Command>
+     * 查找命令
      */
-    public function all(): iterable;
+    public function find(string $name): ?Command;
+
+    /**
+     * 全部命令
+     *
+     * @return array<string, Command>
+     */
+    public function all(): array;
 }

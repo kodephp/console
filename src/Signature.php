@@ -4,205 +4,284 @@ declare(strict_types=1);
 
 namespace Kode\Console;
 
+use Kode\Console\Definition\Argument;
+use Kode\Console\Definition\Option;
+use Kode\Console\Enum\ArgType;
+
 /**
  * 命令签名解析器
- * 
- * 使用 DSL 风格定义命令的参数和选项。
- * 支持参数类型、默认值、必填/可选等特性。
- * 
+ *
+ * 用一行 DSL 描述命令的位置参数与选项，解析结果为不可变的
+ * {@see Argument} / {@see Option} 值对象，供 {@see Input} 绑定和帮助信息渲染使用。
+ *
+ * 语法速查：
+ * ```
+ * app:serve {root?} {files*} {--host=127.0.0.1} {--port|-p:int=8080} {--secure:bool} {--tag : 备注}
+ * ```
+ *
+ * | 写法                  | 含义                         |
+ * |-----------------------|------------------------------|
+ * | `{name}`              | 必填位置参数                 |
+ * | `{name?}`             | 可选位置参数                 |
+ * | `{name=默认值}`       | 带默认值（隐含可选）         |
+ * | `{name:int}`          | 带类型                       |
+ * | `{name:int=100}`      | 带类型 + 默认值              |
+ * | `{files*}`            | 可变参数，收集其后全部参数   |
+ * | `{--flag}`            | 布尔标志                     |
+ * | `{--opt=}`            | 必须显式提供值的选项         |
+ * | `{--opt=默认值}`      | 带默认值的选项               |
+ * | `{--opt|-o:int=8080}` | 短别名 + 类型 + 默认值       |
+ * | `{--opt : 说明文本}`  | 追加说明（空格冒号空格分隔） |
+ *
  * @package Kode\Console
  * @author KodePHP Team
  * @since 1.0.0
- * 
- * @phpstan-type ArgumentDefinition array{required: bool, default: mixed, type: string}
- * @phpstan-type OptionDefinition array{value_required: bool, default: mixed, type: string}
  */
-class Signature
+final class Signature
 {
+    /**
+     * 描述文本分隔符（空格 + 冒号 + 空格），用于与类型标注的冒号区分
+     */
+    private const string DESCRIPTION_SEPARATOR = ' : ';
+
     /**
      * 命令名称
      */
-    protected string $name = '';
-    
-    /**
-     * 原始签名定义
-     */
-    protected string $definition;
-    
-    /**
-     * 参数定义列表
-     * 
-     * @var array<string, ArgumentDefinition>
-     */
-    protected array $arguments = [];
-    
-    /**
-     * 选项定义列表
-     * 
-     * @var array<string, OptionDefinition>
-     */
-    protected array $options = [];
-    
-    /**
-     * 标志别名映射
-     * 
-     * @var array<string, string>
-     */
-    protected array $flags = [];
+    private string $name = '';
 
     /**
-     * 构造函数
-     * 
+     * 位置参数定义
+     *
+     * @var array<string, Argument>
+     */
+    private array $arguments = [];
+
+    /**
+     * 选项定义
+     *
+     * @var array<string, Option>
+     */
+    private array $options = [];
+
+    /**
+     * 短别名到长选项名的映射
+     *
+     * @var array<string, string>
+     */
+    private array $shortcuts = [];
+
+    /**
      * @param string $definition 签名定义字符串
      */
-    public function __construct(string $definition)
+    public function __construct(private readonly string $definition)
     {
-        $this->definition = $definition;
         $this->parse($definition);
     }
 
     /**
-     * 解析命令签名
-     * 
-     * 解析签名定义字符串，提取命令名、参数和选项。
-     * 
-     * 示例：
-     * - `serve {app?} {--port=8080}`
-     * - `migrate {name:string} {--force:bool}`
-     * 
-     * @param string $signature 签名定义字符串
+     * 解析签名
      */
-    protected function parse(string $signature): void
+    private function parse(string $signature): void
     {
-        // 使用正则表达式分割命令定义和参数/选项
-        preg_match('/^([^\s]+)(?:\s+(.+))?$/', $signature, $matches);
-        
-        $this->name = $matches[1] ?? '';
-        $definition = $matches[2] ?? '';
-        
-        if ($definition) {
-            /** @var list<string>|false $tokens */
-            $tokens = preg_split('/\s+/', $definition);
-            if ($tokens !== false) {
-                foreach ($tokens as $token) {
-                    if (str_starts_with($token, '{')) {
-                        $param = trim($token, '{}');
-                        if (str_starts_with($param, '--')) {
-                            $this->parseOption($param);
-                        } else {
-                            $this->parseArgument($param);
-                        }
-                    }
-                }
+        $signature = trim($signature);
+
+        $bracePos = strpos($signature, '{');
+        $this->name = trim($bracePos === false ? $signature : substr($signature, 0, $bracePos));
+
+        if ($bracePos === false) {
+            return;
+        }
+
+        if (preg_match_all('/\{([^}]*)\}/u', $signature, $matches) === false) {
+            return;
+        }
+
+        foreach ($matches[1] as $token) {
+            $token = trim($token);
+
+            if ($token === '') {
+                continue;
+            }
+
+            [$token, $description] = $this->splitDescription($token);
+
+            if (str_starts_with($token, '-')) {
+                $this->parseOption($token, $description);
+            } else {
+                $this->parseArgument($token, $description);
             }
         }
     }
 
     /**
-     * 解析参数定义
-     * 
-     * 支持的格式：
-     * - `{name}` - 必填参数
-     * - `{name?}` - 可选参数
-     * - `{name=default}` - 带默认值的参数
-     * - `{name:string}` - 带类型的参数
-     * - `{name:string=default}` - 带类型和默认值的参数
-     * 
-     * @param string $definition 参数定义字符串
+     * 拆出「空格冒号空格」后面的说明文本
+     *
+     * @return array{0: string, 1: string}
      */
-    protected function parseArgument(string $definition): void
+    private function splitDescription(string $token): array
     {
-        $argument = [
-            'required' => true,
-            'default' => null,
-            'type' => 'string',
+        $pos = strpos($token, self::DESCRIPTION_SEPARATOR);
+
+        if ($pos === false) {
+            return [$token, ''];
+        }
+
+        return [
+            rtrim(substr($token, 0, $pos)),
+            trim(substr($token, $pos + strlen(self::DESCRIPTION_SEPARATOR))),
         ];
-
-        // 处理可选参数 {argument?}
-        if (str_ends_with($definition, '?')) {
-            $argument['required'] = false;
-            $definition = substr($definition, 0, -1);
-        }
-
-        // 处理类型 {argument:string}
-        if (str_contains($definition, ':')) {
-            [$name, $type] = explode(':', $definition, 2);
-            $argument['type'] = $type;
-        } else {
-            $name = $definition;
-        }
-
-        // 处理默认值 {argument=default} 或 {argument:string=default}
-        if (str_contains($name, '=')) {
-            [$name, $default] = explode('=', $name, 2);
-            $argument['required'] = false;
-            $argument['default'] = $default;
-        }
-
-        $this->arguments[$name] = $argument;
     }
 
     /**
-     * 解析选项定义
-     * 
-     * 支持的格式：
-     * - `{--option}` - 标志选项
-     * - `{--option=}` - 必填值选项
-     * - `{--option=default}` - 带默认值的选项
-     * - `{--option:string}` - 带类型的选项
-     * - `{--option|-o}` - 带短别名的选项
-     * 
-     * @param string $definition 选项定义字符串
+     * 解析位置参数
      */
-    protected function parseOption(string $definition): void
+    private function parseArgument(string $token, string $description): void
     {
-        $option = [
-            'value_required' => false,
-            'default' => null,
-            'type' => 'string',
-        ];
+        $required = true;
+        $variadic = false;
+        $rawDefault = null;
 
-        // 处理带值的选项 {--option=}
-        if (str_ends_with($definition, '=')) {
-            $option['value_required'] = true;
-            $name = substr($definition, 0, -1);
-        }
-        // 处理带默认值的选项 {--option=default}
-        elseif (str_contains($definition, '=')) {
-            [$name, $default] = explode('=', $definition, 2);
-            $option['value_required'] = false;
-            $option['default'] = $default;
-        } else {
-            // 标志选项 {--option}
-            $name = $definition;
+        // {name=default} / {name:int=100}
+        if (str_contains($token, '=')) {
+            [$token, $rawDefault] = explode('=', $token, 2);
+            $required = false;
         }
 
-        // 处理类型 {--option:string}
-        if (str_contains($name, ':')) {
-            [$name, $type] = explode(':', $name, 2);
-            $option['type'] = $type;
+        // {name:int}
+        $type = ArgType::String;
+        if (str_contains($token, ':')) {
+            [$token, $rawType] = explode(':', $token, 2);
+            $type = ArgType::parse($rawType);
         }
 
-        // 处理 {--option|-o} 格式
-        if (str_contains($name, '|')) {
-            $parts = explode('|', $name);
-            $name = ltrim($parts[0], '-');
-            if (isset($parts[1])) {
-                $alias = ltrim($parts[1], '-');
-                $this->flags[$alias] = $name; // 别名映射到主名称
+        $name = trim($token);
+
+        // {files*} 可变参数
+        if (str_ends_with($name, '*')) {
+            $variadic = true;
+            $name = substr($name, 0, -1);
+            $type = $type === ArgType::String ? ArgType::Array : $type;
+        }
+
+        // {name?}
+        if (str_ends_with($name, '?')) {
+            $required = false;
+            $name = substr($name, 0, -1);
+        }
+
+        $name = trim($name);
+
+        if ($name === '') {
+            return;
+        }
+
+        $this->arguments[$name] = new Argument(
+            name: $name,
+            type: $type,
+            required: $required,
+            default: $rawDefault === null ? null : $type->cast($rawDefault),
+            variadic: $variadic,
+            description: $description,
+        );
+    }
+
+    /**
+     * 解析选项
+     */
+    private function parseOption(string $token, string $description): void
+    {
+        $acceptsValue = false;
+        $valueRequired = false;
+        $rawDefault = null;
+
+        // {--opt=} / {--opt=default}
+        if (str_contains($token, '=')) {
+            [$token, $rawDefault] = explode('=', $token, 2);
+            $acceptsValue = true;
+
+            if ($rawDefault === '') {
+                $valueRequired = true;
+                $rawDefault = null;
             }
-        } else {
-            // 移除可能的横线前缀
-            $name = ltrim($name, '-');
         }
 
-        $this->options[$name] = $option;
+        // {--opt:int}
+        $type = ArgType::String;
+        $typed = false;
+        if (str_contains($token, ':')) {
+            [$token, $rawType] = explode(':', $token, 2);
+            $type = ArgType::parse($rawType);
+            $typed = true;
+        }
+
+        // 声明了非 bool 类型即视为接受值
+        if (!$acceptsValue && $typed && $type !== ArgType::Bool) {
+            $acceptsValue = true;
+        }
+
+        [$name, $shortcut] = $this->splitNames($token);
+
+        if ($name === '') {
+            return;
+        }
+
+        if ($shortcut !== null) {
+            $this->shortcuts[$shortcut] = $name;
+        }
+
+        $this->options[$name] = new Option(
+            name: $name,
+            shortcut: $shortcut,
+            type: $type,
+            acceptsValue: $acceptsValue,
+            valueRequired: $valueRequired,
+            default: $rawDefault === null ? null : $type->cast($rawDefault),
+            description: $description,
+        );
     }
 
     /**
-     * 获取命令名称
-     * 
-     * @return string 命令名称
+     * 拆分 `--port|-p` / `-p|--port` 形式的长短名
+     *
+     * @return array{0: string, 1: string|null}
+     */
+    private function splitNames(string $token): array
+    {
+        $name = '';
+        $shortcut = null;
+
+        foreach (explode('|', $token) as $part) {
+            $part = ltrim(trim($part), '-');
+
+            if ($part === '') {
+                continue;
+            }
+
+            if (strlen($part) === 1 && $name !== '') {
+                $shortcut = $part;
+            } elseif ($name === '') {
+                $name = $part;
+            } elseif ($shortcut === null) {
+                $shortcut = $part;
+            }
+        }
+
+        // 仅提供了单字符名，如 {-v}
+        if ($name === '' && $shortcut !== null) {
+            $name = $shortcut;
+            $shortcut = null;
+        }
+
+        // 长名比短名后写时纠正顺序，如 {-p|--port}
+        if ($shortcut !== null && strlen($name) === 1 && strlen($shortcut) > 1) {
+            [$name, $shortcut] = [$shortcut, $name];
+        }
+
+        return [$name, $shortcut];
+    }
+
+    /**
+     * 命令名称
      */
     public function getName(): string
     {
@@ -210,9 +289,17 @@ class Signature
     }
 
     /**
-     * 获取参数定义
-     * 
-     * @return array<string, ArgumentDefinition> 参数定义列表
+     * 原始签名定义
+     */
+    public function getDefinition(): string
+    {
+        return $this->definition;
+    }
+
+    /**
+     * 全部位置参数
+     *
+     * @return array<string, Argument>
      */
     public function getArguments(): array
     {
@@ -220,9 +307,27 @@ class Signature
     }
 
     /**
-     * 获取选项定义
-     * 
-     * @return array<string, OptionDefinition> 选项定义列表
+     * 按名称获取位置参数
+     */
+    public function getArgument(string $name): ?Argument
+    {
+        return $this->arguments[$name] ?? null;
+    }
+
+    /**
+     * 按顺序返回位置参数名
+     *
+     * @return array<int, string>
+     */
+    public function argumentNames(): array
+    {
+        return array_keys($this->arguments);
+    }
+
+    /**
+     * 全部选项
+     *
+     * @return array<string, Option>
      */
     public function getOptions(): array
     {
@@ -230,12 +335,30 @@ class Signature
     }
 
     /**
-     * 获取标志别名映射
-     * 
-     * @return array<string, string> 别名到主名称的映射
+     * 按名称获取选项
      */
-    public function getFlags(): array
+    public function getOption(string $name): ?Option
     {
-        return $this->flags;
+        return $this->options[$name] ?? null;
+    }
+
+    /**
+     * 按短别名获取选项
+     */
+    public function optionForShortcut(string $shortcut): ?Option
+    {
+        $name = $this->shortcuts[$shortcut] ?? null;
+
+        return $name === null ? null : ($this->options[$name] ?? null);
+    }
+
+    /**
+     * 短别名映射表
+     *
+     * @return array<string, string>
+     */
+    public function getShortcuts(): array
+    {
+        return $this->shortcuts;
     }
 }
