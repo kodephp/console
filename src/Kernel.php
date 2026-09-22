@@ -34,7 +34,7 @@ use Throwable;
 class Kernel implements IsKernel
 {
     /** 组件版本号 */
-    public const string VERSION = '4.0.0';
+    public const string VERSION = '4.0.1';
 
     /** 内核启动事件 */
     public const string EVENT_BOOTING = 'kernel.booting';
@@ -91,6 +91,12 @@ class Kernel implements IsKernel
      * 输出对象，未显式设置时惰性创建
      */
     private ?Output $output = null;
+
+    /** 输出对象是否由外部注入（注入的对象跨 run 复用是调用方的意图，内核不重置） */
+    private bool $outputInjected = false;
+
+    /** 本次 boot 是否已经派发过 terminated 事件（防止监听器抛错导致二次派发） */
+    private bool $terminated = false;
 
     /**
      * 是否捕获命令异常（关闭后异常将向外抛出，便于测试）
@@ -150,10 +156,21 @@ class Kernel implements IsKernel
             throw InvalidCommandException::duplicated($command->name);
         }
 
+        // 命令名撞上已登记的别名：find() 先查别名表，新命令会永远不可达（静默错路由）。
+        $takenBy = $this->aliases[$command->name] ?? null;
+        if ($takenBy !== null) {
+            throw InvalidCommandException::aliasConflict($command->name, $takenBy);
+        }
+
         $this->cmds[$command->name] = $command;
 
         foreach ($command->getAliases() as $alias) {
-            $this->aliases[$alias] ??= $command->name;
+            if ($alias === $command->name) {
+                continue;
+            }
+
+            $this->assertAliasFree($alias, $command->name);
+            $this->aliases[$alias] = $command->name;
         }
 
         return $this;
@@ -161,12 +178,35 @@ class Kernel implements IsKernel
 
     /**
      * 添加命令别名
+     *
+     * @throws InvalidCommandException 别名与已有命令名或其它命令的别名冲突
      */
     public function alias(string $alias, string $commandName): static
     {
+        $this->assertAliasFree($alias, $commandName);
         $this->aliases[$alias] = $commandName;
 
         return $this;
+    }
+
+    /**
+     * 别名必须既不与某个命令名同名，也不抢走别的命令已有的别名
+     *
+     * 旧实现是 `$aliases[$alias] ??= …` 静默跳过 / 直接覆写：冲突时命令照样注册成功，
+     * 运行时却按别名表跑到另一个命令上——插件各自注册命令，跨插件同名别名即静默错路由。
+     *
+     * @throws InvalidCommandException
+     */
+    private function assertAliasFree(string $alias, string $owner): void
+    {
+        if (isset($this->cmds[$alias])) {
+            throw InvalidCommandException::aliasConflict($alias, $this->cmds[$alias]->name);
+        }
+
+        $existing = $this->aliases[$alias] ?? null;
+        if ($existing !== null && $existing !== $owner) {
+            throw InvalidCommandException::aliasConflict($alias, $existing);
+        }
     }
 
     /**
@@ -218,6 +258,7 @@ class Kernel implements IsKernel
     public function setOutput(Output $output): static
     {
         $this->output = $output;
+        $this->outputInjected = true;
 
         return $this;
     }
@@ -264,6 +305,17 @@ class Kernel implements IsKernel
     public function boot(array $argv): int
     {
         $argv = array_values($argv);
+
+        // 内核自持的输出对象每次 boot 重建：常驻进程里同一个 Kernel 会 boot 多次
+        // （框架把它注册成容器单例），上一次 `-q`/`--no-ansi` 的 verbosity 与着色状态
+        // 否则会粘到下一次运行——表现为"没传 -q 也没有任何输出"。
+        // 外部 setOutput() 注入的对象按调用方意图保留，内核不抹它配好的 verbosity/着色。
+        if (!$this->outputInjected) {
+            $this->output = null;
+        }
+
+        $this->terminated = false;
+
         $out = $this->getOutput();
         $this->applyGlobalFlags($argv, $out);
 
@@ -271,7 +323,8 @@ class Kernel implements IsKernel
 
         $requested = $argv[1] ?? null;
 
-        if ($requested === null || $requested === 'list') {
+        if ($requested === null || ($requested === 'list' && !isset($this->cmds['list']))) {
+            // 只有没人注册名为 list 的命令时，才把它当作内置帮助词；否则注册方永远跑不到自己的命令。
             $this->showHelp($out);
 
             return $this->terminate(ExitCode::Success);
@@ -289,9 +342,20 @@ class Kernel implements IsKernel
 
             if ($command instanceof Command) {
                 $command->showHelp(new Input([$command->name], $command->getSignature()), $out);
-            } else {
-                $this->showHelp($out);
+
+                return $this->terminate(ExitCode::Success);
             }
+
+            if ($target !== null) {
+                // 问的是"某个命令的帮助"而该命令不存在：必须非零退出。
+                // 旧实现打印全局帮助并返回 0，CI 里 `kode help <拼错的名字>` 永远绿。
+                $out->error("命令 '{$target}' 不存在");
+                $this->showHelp($out);
+
+                return $this->terminate(ExitCode::NotFound);
+            }
+
+            $this->showHelp($out);
 
             return $this->terminate(ExitCode::Success);
         }
@@ -330,12 +394,14 @@ class Kernel implements IsKernel
             return $this->terminate(ExitCode::InvalidInput);
         }
 
-        $this->dispatch(self::EVENT_COMMAND_EXECUTING, [
-            'command' => $command->name,
-            'argv' => $in->raw(),
-        ]);
-
         try {
+            // 事件派发放进 try：监听器抛错时按 catchExceptions 的既定契约处理，
+            // 而不是从 boot() 里逃出去（README 承诺的是 `exit($kernel->run($argv))`，不是裸异常）。
+            $this->dispatch(self::EVENT_COMMAND_EXECUTING, [
+                'command' => $command->name,
+                'argv' => $in->raw(),
+            ]);
+
             $code = $this->runWithMiddleware($command, $in, $out);
 
             $this->dispatch(self::EVENT_COMMAND_EXECUTED, [
@@ -345,11 +411,16 @@ class Kernel implements IsKernel
 
             return $this->terminate($code);
         } catch (Throwable $e) {
-            $this->dispatch(self::EVENT_COMMAND_ERROR, [
-                'command' => $command->name,
-                'exception' => $e::class,
-                'message' => $e->getMessage(),
-            ]);
+            // 已在处理异常，这里再抛会把原始故障换成"监听器故障"，故只报告不阻断。
+            try {
+                $this->dispatch(self::EVENT_COMMAND_ERROR, [
+                    'command' => $command->name,
+                    'exception' => $e::class,
+                    'message' => $e->getMessage(),
+                ]);
+            } catch (Throwable $listenerError) {
+                $out->error('command.error 监听器异常: ' . $listenerError->getMessage());
+            }
 
             if (!$this->catchExceptions) {
                 throw $e;
@@ -373,7 +444,16 @@ class Kernel implements IsKernel
      */
     private function applyGlobalFlags(array $argv, Output $out): void
     {
+        // 只按本次 argv 追加设定，不重置：外部 setOutput() 注入的 Output 上调用方自己
+        // 配好的 verbosity/着色属调用方意图（测试与中间件调试依赖它），内核无权抹掉。
+        // 跨 run 的状态泄漏由 boot() 重建内核自持 Output 来堵。
         foreach ($argv as $token) {
+            // `--` 之后的 token 按契约原样交给命令，绝不解释成全局标志。
+            // 此前是全量扫描，`kode some:cmd -- -q` 会把整轮输出静默吞掉并对管道返回 0（"空成功"）。
+            if ($token === '--') {
+                break;
+            }
+
             match (true) {
                 $token === '-q', $token === '--quiet' => $out->setVerbosity(Verbosity::Quiet),
                 $token === '-v', $token === '--verbose' => $out->setVerbosity(Verbosity::Verbose),
@@ -391,7 +471,21 @@ class Kernel implements IsKernel
     private function terminate(int|ExitCode $code): int
     {
         $code = ExitCode::normalize($code);
-        $this->dispatch(self::EVENT_TERMINATED, ['code' => $code]);
+
+        // 幂等：terminate 可能在 try 与 catch 两条路径上都被碰到，监听器只应看到一次结束。
+        if ($this->terminated) {
+            return $code;
+        }
+
+        $this->terminated = true;
+
+        // 收尾监听器抛错不该把一次已经跑完的命令换成 fatal：命令结果已定，
+        // 这里只报告并保留原退出码（常驻进程里一个坏监听器会拖死整条命令链路）。
+        try {
+            $this->dispatch(self::EVENT_TERMINATED, ['code' => $code]);
+        } catch (Throwable $listenerError) {
+            $this->getOutput()->error('kernel.terminated 监听器异常: ' . $listenerError->getMessage());
+        }
 
         return $code;
     }

@@ -111,6 +111,30 @@ final class InputTest extends TestCase
         self::assertSame(['a.txt', 'b.txt', 'c.txt'], $in->arg('files'));
     }
 
+    /**
+     * 组合包里遇到「带值选项」必须就地取值
+     *
+     * 旧实现只看首字符类型，其余字符一律当布尔标志：`-fp 8080` 得到 force=false、
+     * port 用默认值、8080 泄成位置参数——静默按错的参数跑完。
+     */
+    public function testShortBundleStopsAtValueTakingOption(): void
+    {
+        $signature = new Signature('t {--force|-f:bool} {--port|-p:int=8080} {name=x}');
+
+        $in = new Input(['t', '-fp', '9090'], $signature);
+        self::assertTrue($in->flag('force'));
+        self::assertSame(9090, $in->opt('port'));
+        self::assertSame('x', $in->arg('name'), '值不该泄成位置参数');
+
+        $attached = new Input(['t', '-fp9090'], $signature);
+        self::assertTrue($attached->flag('force'));
+        self::assertSame(9090, $attached->opt('port'));
+
+        $pure = new Input(['t', '-fp', '9090', 'Ada'], $signature);
+        self::assertSame(9090, $pure->opt('port'));
+        self::assertSame('Ada', $pure->arg('name'));
+    }
+
     public function testRepeatedOptionsAreAggregated(): void
     {
         $in = new Input(['x', '--tag=a', '--tag=b']);

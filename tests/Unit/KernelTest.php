@@ -12,6 +12,10 @@ use Kode\Console\Output;
 use Kode\Console\Tests\Fixture\AttributeCommand;
 use Kode\Console\Tests\Fixture\ExplodingCommand;
 use Kode\Console\Tests\Fixture\GreetCommand;
+use Kode\Console\Tests\Fixture\HijackCommand;
+use Kode\Console\Tests\Fixture\ListCommand;
+use Kode\Console\Tests\Fixture\NoopCommand;
+use Kode\Console\Tests\Fixture\RecordingEventManager;
 use Kode\Console\Tests\Fixture\SpyMiddleware;
 use Kode\Console\Tests\Support\Streams;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -65,7 +69,7 @@ final class KernelTest extends TestCase
 
         $content = Streams::read($kernel->getOutput()->getStream());
         self::assertSame(0, $code);
-        self::assertStringContainsString('Kode Console 4.0.0', $content);
+        self::assertStringContainsString('Kode Console ' . Kernel::VERSION, $content);
         self::assertStringContainsString('greet', $content);
         self::assertStringNotContainsString('attr:ping', $content);
     }
@@ -166,5 +170,162 @@ final class KernelTest extends TestCase
         $kernel2 = (new Kernel())->setOutput($debug)->add(GreetCommand::class)->addMiddleware(new LoggingMiddleware());
         $kernel2->boot(['console', 'greet', 'World']);
         self::assertStringContainsString('命令开始执行', Streams::read($debug->getStream()));
+    }
+
+    // ------------------------------------------------------------------
+    // 常驻进程跨 boot 状态
+    // ------------------------------------------------------------------
+
+    /**
+     * 内核自持的 Output 不得把上一次的 -q 状态留给下一次 boot
+     *
+     * 框架把 Kernel 注册成容器单例；任何在同一进程内二次调用 boot()/run() 的代码
+     * （计划任务、队列 worker、测试）都会继承上一轮的 verbosity，
+     * 表现为「没传 -q 却完全没有输出」，且退出码仍是 0。
+     */
+    public function testKernelOwnedOutputIsRebuiltForEachBoot(): void
+    {
+        $kernel = new Kernel();
+        $kernel->add(NoopCommand::class);
+
+        $first = $kernel->getOutput();
+        self::assertSame(0, $kernel->boot(['console', 'noop', '-q']));
+        self::assertSame(Verbosity::Quiet, $kernel->getOutput()->getVerbosity());
+
+        self::assertSame(0, $kernel->boot(['console', 'noop']));
+        self::assertSame(Verbosity::Normal, $kernel->getOutput()->getVerbosity(), '第二次 boot 不应沿用上一轮的 Quiet');
+        self::assertNotSame($first, $kernel->getOutput(), '内核自持的输出对象应每次 boot 重建');
+    }
+
+    /**
+     * 外部注入的 Output 是调用方的资产，boot 不得抹掉它配好的 verbosity
+     */
+    public function testInjectedOutputKeepsItsOwnVerbosity(): void
+    {
+        $output = new Output(Streams::memory(), Streams::memory(), false, Verbosity::Debug);
+        $kernel = (new Kernel())->setOutput($output)->add(NoopCommand::class);
+
+        self::assertSame(0, $kernel->boot(['console', 'noop']));
+        self::assertSame(Verbosity::Debug, $kernel->getOutput()->getVerbosity());
+    }
+
+    /**
+     * `--` 之后的 token 按契约原样交给命令，不得被解释成全局标志
+     *
+     * Input 的注释承诺「-- 之后的内容原样保留」，而全局标志扫描是全量 argv 扫描：
+     * `kode greet Ada -- -q` 会被静默消音并对管道返回 0（对脚本调用方是"空成功"）。
+     */
+    public function testDoubleDashShieldsTokensFromGlobalFlags(): void
+    {
+        $output = new Output(Streams::memory(), Streams::memory(), false, Verbosity::Normal);
+        $kernel = (new Kernel())->setOutput($output)->add(AttributeCommand::class);
+
+        // `--` 之后的 token 归命令所有（这里落进 host），但绝不能被内核当成全局 -q 消音。
+        self::assertSame(0, $kernel->boot(['console', 'attr:ping', '--', '-q']));
+        self::assertSame(Verbosity::Normal, $output->getVerbosity());
+        self::assertStringContainsString('PING', Streams::read($output->getStream()), '-- 之后的 -q 不该消音');
+    }
+
+    // ------------------------------------------------------------------
+    // 别名冲突
+    // ------------------------------------------------------------------
+
+    /**
+     * 命令别名撞上已有命令名时必须报错，而不是静默错路由
+     *
+     * find() 先查别名表：静默注册成功意味着其中一个命令永远跑不到，
+     * 而插件命令与主应用命令同表注册，跨插件同名别名是现实场景。
+     */
+    public function testAliasShadowingExistingCommandThrows(): void
+    {
+        $kernel = $this->kernel()->add(GreetCommand::class);
+
+        $this->expectException(\Kode\Console\Exception\InvalidCommandException::class);
+
+        $kernel->add(HijackCommand::class);
+    }
+
+    public function testRegisteringCommandNameAlreadyTakenByAliasThrows(): void
+    {
+        $kernel = $this->kernel()->add(HijackCommand::class);
+
+        $this->expectException(\Kode\Console\Exception\InvalidCommandException::class);
+
+        $kernel->add(GreetCommand::class);
+    }
+
+    public function testAliasOverridingAnotherCommandsAliasThrows(): void
+    {
+        $kernel = $this->kernel()->add(GreetCommand::class)->add(AttributeCommand::class);
+
+        $this->expectException(\Kode\Console\Exception\InvalidCommandException::class);
+
+        // 'hi' 已经是 greet 的别名；改指向 attr:ping 会让 greet 的 hi 静默消失
+        $kernel->alias('hi', 'attr:ping');
+    }
+
+    // ------------------------------------------------------------------
+    // 帮助与退出码
+    // ------------------------------------------------------------------
+
+    /**
+     * `help <不存在的命令>` 必须非零退出，否则 CI 里问错命令永远绿
+     */
+    public function testHelpForUnknownCommandExitsNonZero(): void
+    {
+        $kernel = $this->kernel()->add(GreetCommand::class);
+
+        self::assertSame(127, $kernel->boot(['console', 'help', 'greetx']));
+    }
+
+    public function testHelpForKnownCommandSucceeds(): void
+    {
+        $kernel = $this->kernel()->add(GreetCommand::class);
+        $output = $kernel->getOutput();
+
+        self::assertSame(0, $kernel->boot(['console', 'help', 'greet']));
+        self::assertStringContainsString('greet', Streams::read($output->getStream()));
+    }
+
+    /**
+     * 注册了名为 list 的命令时，内置帮助词不得把它永久遮蔽
+     */
+    public function testRegisteredListCommandIsReachable(): void
+    {
+        $kernel = $this->kernel()->add(ListCommand::class);
+
+        self::assertSame(0, $kernel->boot(['console', 'list']));
+        self::assertStringContainsString('LIST-RAN', Streams::read($kernel->getOutput()->getStream()));
+    }
+
+    // ------------------------------------------------------------------
+    // 事件派发
+    // ------------------------------------------------------------------
+
+    /**
+     * 命令执行前的事件异常按 catchExceptions 契约处理，不从 boot() 逃出
+     */
+    public function testExecutingListenerExceptionIsHandledByCatchExceptions(): void
+    {
+        $kernel = $this->kernel()
+            ->add(GreetCommand::class)
+            ->setEventManager(new RecordingEventManager('command.executing'));
+
+        self::assertSame(1, $kernel->boot(['console', 'greet', 'Ada']));
+    }
+
+    /**
+     * terminated 事件在一次 boot 内只派发一次
+     *
+     * 成功路径的 terminate() 在 try 内，监听器抛错会进 catch 再 terminate 一次；
+     * 监听器（如指标上报、日志收尾）看到两次结束即重复结算。
+     */
+    public function testTerminatedEventDispatchedOnceEvenWhenCommandFails(): void
+    {
+        $events = new RecordingEventManager('kernel.terminated');
+        $kernel = $this->kernel()->add(ExplodingCommand::class)->setEventManager($events);
+
+        self::assertSame(1, $kernel->boot(['console', 'boom']));
+        self::assertSame(1, $events->counts['kernel.terminated'] ?? 0, 'terminated 只应派发一次');
     }
 }

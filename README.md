@@ -187,6 +187,29 @@ $port = $in->cast($in->opt('port'), 'int');
 $valid = $in->validate('port', $port, ['required', 'numeric', 'min:1', 'max:65535']);
 ```
 
+短选项簇按字符逐个解析，遇到需要取值的选项就停下展开：`-qv` 等价 `-q -v`，
+`-qn 5` 与 `-qn5` 都把 `5` 当作 `name` 的值（不再把 `n` 之后的字符误认成第二组标志）。
+
+`--` 之后的 token 一律视为位置参数，不再参与全局选项识别：
+
+```php
+// console greet Ada -- -q   →  -q 是 greet 的参数，不会把输出静默吞掉
+// 全局选项（-q / -v / --version / --no-ansi …）写在命令名之后
+$kernel->boot(['console', 'greet', 'Ada', '--', '-q']);
+```
+
+### 内核生命周期
+
+`Kernel` 常驻容器（框架把它注册为单例），一次进程内可能 boot 多次，因此：
+
+- 内核自持的 `Output` 每次 `boot()` 重建，上一轮的缓冲、计数、耗时不会带到下一轮；
+  外部用 `setOutput()` 注入过的对象按调用方意图保留，不再被重置。
+- `kernel.terminated` 每次 boot 只派发一次（重复 `terminate()` 幂等返回原退出码），
+  监听器抛错会被捕获并写到错误流，不改变返回值。
+- `command.executing` / `command.error` 的监听器异常同样被捕获，不会把已成功的命令改成崩溃。
+- `help <不存在的命令>` 打印帮助页并返回 `ExitCode::NotFound`（127），不再静默返回 0；
+  注册了名为 `list` 的命令时，`console list` 走该命令本身，不会被内置帮助页遮蔽。
+
 ### 交互式输入
 
 ```php
@@ -279,6 +302,16 @@ $kernel->setEventManager($eventManager);
 ```
 
 内置事件：`kernel.booting` / `kernel.terminated` / `command.executing` / `command.executed` / `command.error`。
+
+### 命令别名与冲突
+
+`find()` 先查别名表再查命令表，所以别名一旦与命令名或其他别名重名，被覆盖的一方会**永远不可达**。
+注册时即拒绝（`InvalidCommandException::aliasConflict`，提示"别名 'x' 已被 'y' 占用"），不留到运行期才发现：
+
+```php
+$kernel->add(ServeCommand::class);   // aliases: ['server']
+$kernel->alias('deploy', 'server');  // ✗ 抛出：'server' 已被 serve 占用
+```
 
 ### 命令别名与示例
 
@@ -376,7 +409,7 @@ kode/console
 | `addGroup(CommandGroup): static` | 添加命令组 |
 | `addMiddleware(IsMiddleware): static` | 添加中间件 |
 | `setEventManager(IsEventManager): static` | 设置事件管理器 |
-| `setOutput(Output): static` | 注入输出（测试场景） |
+| `setOutput(Output): static` | 注入输出（测试场景）；注入后内核不再按 boot 重建该对象 |
 | `run(?array): int` / `boot(array): int` | 运行控制台 |
 | `find(string): ?Command` / `resolve(string): Command` | 查找 / 解析命令（含拼写建议） |
 | `has(string): bool` / `all(): array` / `groups(): array` | 查询已注册命令 |

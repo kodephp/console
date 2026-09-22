@@ -38,4 +38,9 @@ final class InvalidCommandException extends ConsoleException
     {
         return new self("命令 '{$name}' 已被注册，不能重复注册。");
     }
+
+    public static function aliasConflict(string $alias, string $takenBy): self
+    {
+        return new self("别名 '{$alias}' 已被 '{$takenBy}' 占用，注册它将使其中一方永远不可达。");
+    }
 }

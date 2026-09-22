@@ -250,9 +250,39 @@ class Input implements IsInput
             return 0;
         }
 
-        // 组合标志 -abc
-        foreach (str_split($body) as $char) {
-            $this->setFlag($char);
+        // 组合包 -abc / -abp8080：逐字符判定类型，遇到「带值选项」就把该处之后的部分
+        // （或下一个 token）作为它的值。旧实现只看首字符，其余一律当布尔标志，
+        // `-fp 8080` 结果是 force=false、port 用默认值、8080 泄成位置参数——静默错解析。
+        $chars = str_split($body);
+
+        foreach ($chars as $i => $char) {
+            $opt = $this->signature?->optionForShortcut($char);
+
+            if (!$opt instanceof Option || !$opt->acceptsValue) {
+                $this->setFlag($char);
+
+                continue;
+            }
+
+            $rest = implode('', array_slice($chars, $i + 1));
+
+            if ($rest !== '') {
+                $this->setOption($opt->name, ltrim($rest, '='));
+
+                return 0;
+            }
+
+            $next = $tokens[$index + 1] ?? null;
+
+            if ($next !== null && !$this->isOptionToken($next)) {
+                $this->setOption($opt->name, $next);
+
+                return 1;
+            }
+
+            $this->setOption($opt->name, null);
+
+            return 0;
         }
 
         return 0;
