@@ -77,7 +77,7 @@ final class KernelTest extends TestCase
 
         $content = Streams::read($kernel->getOutput()->getStream());
         self::assertSame(0, $code);
-        self::assertStringContainsString('4.0.0', $content);
+        self::assertStringContainsString(\Kode\Console\Kernel::VERSION, $content);
     }
 
     public function testBootHelpForCommand(): void
