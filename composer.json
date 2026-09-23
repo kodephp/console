@@ -4,7 +4,7 @@
     "keywords": ["console", "cli", "command", "terminal", "php83", "php84", "php85", "framework", "kodephp"],
     "homepage": "https://github.com/kodephp/console",
     "license": "Apache-2.0",
-    "version": "4.0.2",
+    "version": "4.1.0",
     "authors": [
         {
             "name": "KodePHP Team",

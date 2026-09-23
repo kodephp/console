@@ -34,7 +34,7 @@ use Throwable;
 class Kernel implements IsKernel
 {
     /** 组件版本号 */
-    public const string VERSION = '4.0.2';
+    public const string VERSION = '4.1.0';
 
     /**
      * 获取本包版本号（与 composer.json 的 version 交叉核对，漏改由 VersionGuardTest 拦下）。
@@ -58,6 +58,46 @@ class Kernel implements IsKernel
 
     /** 命令异常事件 */
     public const string EVENT_COMMAND_ERROR = 'command.error';
+
+    /**
+     * 内核自行消费的全局标志：argv 里的 token => 动作名
+     *
+     * 动作名只供 applyGlobalFlags() 分派；命令侧要放行的是这些标志在
+     * Input 里留下的键，见 globalFlagNames()。
+     *
+     * @var array<string, string>
+     */
+    public const GLOBAL_FLAGS = [
+        '-q' => 'quiet',
+        '--quiet' => 'quiet',
+        '-v' => 'verbose',
+        '--verbose' => 'verbose',
+        '-vv' => 'debug',
+        '-vvv' => 'debug',
+        '--debug' => 'debug',
+        '--no-ansi' => 'plain',
+        '--no-color' => 'plain',
+        '--ansi' => 'colored',
+    ];
+
+    /**
+     * 全局标志在 Input::flags()/options() 里留下的键
+     *
+     * 命令校验「未知选项」时必须放行这些，否则 `kode cmd -v` 会被自家命令判成未知。
+     * 短选项按字符逐个记账，所以 `-vv`、`-vvv` 与 `-v` 留下的是同一个 `v`。
+     *
+     * @return list<string>
+     */
+    public static function globalFlagNames(): array
+    {
+        $names = [];
+        foreach (array_keys(self::GLOBAL_FLAGS) as $token) {
+            $body = ltrim($token, '-');
+            $names[(string) preg_replace('/^(.)\1+$/', '$1', $body)] = true;
+        }
+
+        return array_keys($names);
+    }
 
     /** 命令名相似度阈值，用于「你是不是想执行」提示 */
     private const int SUGGESTION_DISTANCE = 3;
@@ -462,12 +502,12 @@ class Kernel implements IsKernel
                 break;
             }
 
-            match (true) {
-                $token === '-q', $token === '--quiet' => $out->setVerbosity(Verbosity::Quiet),
-                $token === '-v', $token === '--verbose' => $out->setVerbosity(Verbosity::Verbose),
-                $token === '-vv', $token === '-vvv', $token === '--debug' => $out->setVerbosity(Verbosity::Debug),
-                $token === '--no-ansi', $token === '--no-color' => $out->setDecorated(false),
-                $token === '--ansi' => $out->setDecorated(true),
+            match (self::GLOBAL_FLAGS[$token] ?? null) {
+                'quiet' => $out->setVerbosity(Verbosity::Quiet),
+                'verbose' => $out->setVerbosity(Verbosity::Verbose),
+                'debug' => $out->setVerbosity(Verbosity::Debug),
+                'plain' => $out->setDecorated(false),
+                'colored' => $out->setDecorated(true),
                 default => null,
             };
         }

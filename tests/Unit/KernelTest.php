@@ -6,6 +6,7 @@ namespace Kode\Console\Tests\Unit;
 
 use Kode\Console\Enum\Verbosity;
 use Kode\Console\Exception\CommandNotFoundException;
+use Kode\Console\Input;
 use Kode\Console\Kernel;
 use Kode\Console\Middleware\LoggingMiddleware;
 use Kode\Console\Output;
@@ -327,5 +328,80 @@ final class KernelTest extends TestCase
 
         self::assertSame(1, $kernel->boot(['console', 'boom']));
         self::assertSame(1, $events->counts['kernel.terminated'] ?? 0, 'terminated 只应派发一次');
+    }
+
+    // ------------------------------------------------------------------
+    // 全局标志的名字面
+    // ------------------------------------------------------------------
+
+    /**
+     * 每个全局标志 token 的实际效果逐一钉死
+     *
+     * 预期按 token 字面写出，不从 GLOBAL_FLAGS 反推：否则表与 applyGlobalFlags()
+     * 的分派同时写错（`--ansi` 被接到关闭着色）时，测试会跟着一起错。
+     */
+    public function testEveryGlobalFlagTokenTakesEffect(): void
+    {
+        /** @var array<string, array{0: Verbosity, 1: bool|null}> token => [verbosity, 着色（null = 不关心）] */
+        $expected = [
+            '-q' => [Verbosity::Quiet, null],
+            '--quiet' => [Verbosity::Quiet, null],
+            '-v' => [Verbosity::Verbose, null],
+            '--verbose' => [Verbosity::Verbose, null],
+            '-vv' => [Verbosity::Debug, null],
+            '-vvv' => [Verbosity::Debug, null],
+            '--debug' => [Verbosity::Debug, null],
+            '--no-ansi' => [Verbosity::Normal, false],
+            '--no-color' => [Verbosity::Normal, false],
+            '--ansi' => [Verbosity::Normal, true],
+        ];
+
+        foreach ($expected as $token => [$verbosity, $decorated]) {
+            self::assertArrayHasKey($token, Kernel::GLOBAL_FLAGS, "{$token} 已从全局标志表里丢失");
+
+            // 着色断言要从「相反值」起步：初始就 false 时「--no-ansi 什么都不做」也能过
+            $output = new Output(Streams::memory(), Streams::memory(), $decorated === false, Verbosity::Normal);
+            $kernel = (new Kernel())->setOutput($output)->add(NoopCommand::class);
+
+            self::assertSame(0, $kernel->boot(['console', 'noop', $token]));
+            self::assertSame($verbosity, $output->getVerbosity(), "{$token} 没有设置预期的 verbosity");
+
+            if ($decorated !== null) {
+                self::assertSame($decorated, $output->isDecorated(), "{$token} 没有改变着色开关");
+            }
+        }
+    }
+
+    /**
+     * globalFlagNames() 必须覆盖 Input 对这些 token 记账用的键
+     *
+     * 命令侧靠这个名字面放行内核标志（否则 `kode cmd -v` 会被自家命令判成未知选项）。
+     * Input 按字符记账短选项，`-vv`/`-vvv` 与 `-v` 同样落成 `v`，这层折叠一旦漂移
+     * 就会双向出错：该放行的被报错、不该放行的被静默忽略。
+     */
+    public function testGlobalFlagNamesCoverWhatInputRecords(): void
+    {
+        $names = Kernel::globalFlagNames();
+
+        foreach (array_keys(Kernel::GLOBAL_FLAGS) as $token) {
+            $input = new Input(['console', $token]);
+            $recorded = array_keys($input->flags() + $input->options());
+
+            self::assertNotSame([], $recorded, "{$token} 没有被 Input 记账，名字面无从放行");
+            foreach ($recorded as $key) {
+                self::assertContains($key, $names, "Input 把 {$token} 记成 {$key}，globalFlagNames() 却未放行");
+            }
+        }
+    }
+
+    /**
+     * 名字面不能宽到把命令该报的未知选项也放行
+     */
+    public function testGlobalFlagNamesStayMinimal(): void
+    {
+        self::assertEqualsCanonicalizing(
+            ['q', 'quiet', 'v', 'verbose', 'debug', 'no-ansi', 'no-color', 'ansi'],
+            Kernel::globalFlagNames()
+        );
     }
 }

@@ -8,7 +8,7 @@
 
 ## 版本自述
 
-本包版本可由类常量核对：`Kode\Console\Kernel::VERSION`，或调用 `Kernel::version()`（当前 `4.0.2`）。`composer.json` 的 `version` 是 composer 侧权威值，类常量是它的交叉核对副本——`tests/VersionGuardTest.php` 在两者不一致时直接失败。
+本包版本可由类常量核对：`Kode\Console\Kernel::VERSION`，或调用 `Kernel::version()`（当前 `4.1.0`）。`composer.json` 的 `version` 是 composer 侧权威值，类常量是它的交叉核对副本——`tests/VersionGuardTest.php` 在两者不一致时直接失败。
 
 ## 📦 简介
 
@@ -202,6 +202,22 @@ $valid = $in->validate('port', $port, ['required', 'numeric', 'min:1', 'max:6553
 // 全局选项（-q / -v / --version / --no-ansi …）写在命令名之后
 $kernel->boot(['console', 'greet', 'Ada', '--', '-q']);
 ```
+
+### 全局标志
+
+`-q` / `-v` / `-vv` / `-vvv` / `--quiet` / `--verbose` / `--debug` / `--no-ansi` / `--no-color` / `--ansi`
+由内核自己消费，但仍会照原样记进 `Input::flags()`（`-vv`、`-vvv` 与 `-v` 同样只留下 `v`：短选项按字符逐个记账）。
+
+命令若要校验「用户传了我不认识的选项」，必须放行这些名字，否则 `kode cmd -v` 会被自家命令判成未知选项。
+名字面由内核单点提供，命令侧不要抄一份常量表：
+
+```php
+$known = array_fill_keys(Kernel::globalFlagNames(), true); // ['q', 'quiet', 'v', ...]
+```
+
+`--no-ansi=true` 这类带值写法会落进 `Input::options()`，所以校验时 options/flags 两边都要比对（同一个名字面覆盖）。
+`GLOBAL_FLAGS`（token => 动作）与 `globalFlagNames()`（Input 记账用的键）由 `KernelTest` 互相对齐，
+加一个标志只改这张表即可。
 
 ### 内核生命周期
 
@@ -418,6 +434,8 @@ kode/console
 | `run(?array): int` / `boot(array): int` | 运行控制台 |
 | `find(string): ?Command` / `resolve(string): Command` | 查找 / 解析命令（含拼写建议） |
 | `has(string): bool` / `all(): array` / `groups(): array` | 查询已注册命令 |
+| `Kernel::GLOBAL_FLAGS` | 内核消费的全局标志：argv token → 动作 |
+| `Kernel::globalFlagNames(): array` | 这些标志在 `Input` 里留下的键，供命令侧放行 |
 
 ### 枚举
 
