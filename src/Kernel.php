@@ -34,7 +34,15 @@ use Throwable;
 class Kernel implements IsKernel
 {
     /** 组件版本号 */
-    public const string VERSION = '4.0.1';
+    public const string VERSION = '4.0.2';
+
+    /**
+     * 获取本包版本号（与 composer.json 的 version 交叉核对，漏改由 VersionGuardTest 拦下）。
+     */
+    public static function version(): string
+    {
+        return self::VERSION;
+    }
 
     /** 内核启动事件 */
     public const string EVENT_BOOTING = 'kernel.booting';

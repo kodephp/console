@@ -5,6 +5,11 @@
 [![PHP Version](https://img.shields.io/badge/PHP-%3E%3D8.3-8892BF.svg)](https://php.net/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
 
+
+## 版本自述
+
+本包版本可由类常量核对：`Kode\Console\Kernel::VERSION`，或调用 `Kernel::version()`（当前 `4.0.2`）。`composer.json` 的 `version` 是 composer 侧权威值，类常量是它的交叉核对副本——`tests/VersionGuardTest.php` 在两者不一致时直接失败。
+
 ## 📦 简介
 
 `kode/console` 是一个专为现代 PHP 应用设计的**通用控制台工具包**，基于 PHP 8.3+ 现代特性构建，提供轻量、解耦、可扩展的命令行开发体验。
