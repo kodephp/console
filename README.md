@@ -2,7 +2,7 @@
 
 > **健壮、通用的 PHP 控制台组件**
 
-[![PHP Version](https://img.shields.io/badge/PHP-%3E%3D8.3-8892BF.svg)](https://php.net/)
+[![PHP Version](https://img.shields.io/badge/PHP-%3E%3D8.4-8892BF.svg)](https://php.net/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
 
 
@@ -12,11 +12,11 @@
 
 ## 📦 简介
 
-`kode/console` 是一个专为现代 PHP 应用设计的**通用控制台工具包**，基于 PHP 8.3+ 现代特性构建，提供轻量、解耦、可扩展的命令行开发体验。
+`kode/console` 是一个专为现代 PHP 应用设计的**通用控制台工具包**，基于 PHP 8.4+ 现代特性构建，提供轻量、解耦、可扩展的命令行开发体验。
 
 ### ✨ 特性
 
-- ✅ **PHP 8.3+ 原生支持** — 使用 `enum`、`#[Attribute]`、`#[Override]`、`json_validate()`、类型化类常量、`hrtime()` 等现代特性
+- ✅ **PHP 8.4+ 原生支持** — 使用 `enum`、`#[Attribute]`、`#[Override]`、`json_validate()`、类型化类常量、`hrtime()` 等现代特性
 - ✅ **两种命令定义方式** — 构造函数式与声明式 `#[AsCommand]` 注解，任选其一
 - ✅ **类型安全** — PHPStan 级别 9 静态分析零错误，全量单元测试覆盖
 - ✅ **智能参数解析** — 位置参数命名绑定、短选项别名、类型自动转换、默认值填充、`--` 终止符、负数识别
@@ -450,7 +450,7 @@ kode/console
 
 ### 环境要求
 
-- PHP >= 8.3
+- PHP >= 8.4
 - Composer 2.x
 
 ### 安装依赖
