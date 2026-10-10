@@ -6,7 +6,6 @@
         "cli",
         "command",
         "terminal",
-        "php83",
         "php84",
         "php85",
         "framework",
@@ -14,7 +13,7 @@
     ],
     "homepage": "https://github.com/kodephp/console",
     "license": "Apache-2.0",
-    "version": "5.0.0",
+    "version": "5.0.1",
     "authors": [
         {
             "name": "KodePHP Team",
