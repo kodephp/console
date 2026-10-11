@@ -13,7 +13,7 @@
     ],
     "homepage": "https://github.com/kodephp/console",
     "license": "Apache-2.0",
-    "version": "5.0.4",
+    "version": "5.0.5",
     "authors": [
         {
             "name": "KodePHP Team",
@@ -29,6 +29,10 @@
     },
     "suggest": {
         "ext-mbstring": "更精确地计算全角字符宽度，使表格对齐更稳定"
+    },
+    "support": {
+        "issues": "https://github.com/kodephp/console/issues",
+        "source": "https://github.com/kodephp/console"
     },
     "autoload": {
         "psr-4": {
