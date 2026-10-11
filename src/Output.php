@@ -130,15 +130,7 @@ class Output implements IsOutput
      */
     protected function isTty(mixed $stream): bool
     {
-        if (stream_isatty($stream)) {
-            return true;
-        }
-
-        if (function_exists('posix_isatty')) {
-            return posix_isatty($stream);
-        }
-
-        return false;
+        return stream_isatty($stream);
     }
 
     // ------------------------------------------------------------------
