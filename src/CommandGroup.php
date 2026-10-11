@@ -84,6 +84,7 @@ final class CommandGroup implements Countable, IteratorAggregate
         return isset($this->commands[$name]);
     }
 
+    #[\Override]
     public function count(): int
     {
         return count($this->commands);
@@ -92,6 +93,7 @@ final class CommandGroup implements Countable, IteratorAggregate
     /**
      * @return Traversable<string, Command>
      */
+    #[\Override]
     public function getIterator(): Traversable
     {
         return new \ArrayIterator($this->commands);

@@ -100,6 +100,7 @@ class Input implements IsInput
      *
      * 绑定后将执行：短别名归一化、位置参数命名化、类型转换、默认值填充。
      */
+    #[\Override]
     public function bind(Signature $signature): static
     {
         $this->signature = $signature;
@@ -412,6 +413,7 @@ class Input implements IsInput
      *
      * 传入整数按位置读取，传入字符串按签名命名读取。
      */
+    #[\Override]
     public function arg(string|int $key, mixed $default = null): mixed
     {
         if (is_int($key)) {
@@ -434,6 +436,7 @@ class Input implements IsInput
      *
      * @return array<string, mixed>
      */
+    #[\Override]
     public function args(): array
     {
         return $this->named;
@@ -452,6 +455,7 @@ class Input implements IsInput
     /**
      * 获取选项值
      */
+    #[\Override]
     public function opt(string $name, mixed $default = null): mixed
     {
         $name = $this->resolveName($name);
@@ -472,6 +476,7 @@ class Input implements IsInput
      *
      * @return array<string, mixed>
      */
+    #[\Override]
     public function options(): array
     {
         return $this->options;
@@ -480,6 +485,7 @@ class Input implements IsInput
     /**
      * 检查标志
      */
+    #[\Override]
     public function flag(string $name, bool $default = false): bool
     {
         $resolved = $this->resolveName($name);
@@ -510,6 +516,7 @@ class Input implements IsInput
     /**
      * 参数 / 选项 / 标志是否存在
      */
+    #[\Override]
     public function has(string|int $key): bool
     {
         if (is_int($key)) {
@@ -540,6 +547,7 @@ class Input implements IsInput
      *
      * @return array<int, string>
      */
+    #[\Override]
     public function rest(): array
     {
         return $this->rest;
@@ -550,6 +558,7 @@ class Input implements IsInput
      *
      * @return array<int, string>
      */
+    #[\Override]
     public function raw(): array
     {
         return $this->raw;

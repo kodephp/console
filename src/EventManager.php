@@ -28,6 +28,7 @@ final class EventManager implements IsEventManager
     /**
      * 注册监听器，事件名支持结尾通配符，如 `command.*`
      */
+    #[\Override]
     public function listen(string $event, callable $callback): void
     {
         $this->listeners[$event][] = $callback;
@@ -36,6 +37,7 @@ final class EventManager implements IsEventManager
     /**
      * 分发事件
      */
+    #[\Override]
     public function dispatch(IsEvent $event): void
     {
         foreach ($this->resolveListeners($event->getName()) as $listener) {
@@ -46,6 +48,7 @@ final class EventManager implements IsEventManager
     /**
      * 移除监听器
      */
+    #[\Override]
     public function removeListener(string $event, callable $callback): void
     {
         if (!isset($this->listeners[$event])) {

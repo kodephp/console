@@ -145,6 +145,7 @@ class Output implements IsOutput
     // 配置
     // ------------------------------------------------------------------
 
+    #[\Override]
     public function isDecorated(): bool
     {
         return $this->decorated;
@@ -157,6 +158,7 @@ class Output implements IsOutput
         return $this;
     }
 
+    #[\Override]
     public function getVerbosity(): Verbosity
     {
         return $this->verbosity;
@@ -206,6 +208,7 @@ class Output implements IsOutput
     /**
      * 写入文本（不换行）
      */
+    #[\Override]
     public function write(string $text, Color|string|null $color = null, Verbosity $level = Verbosity::Normal): void
     {
         if (!$this->verbosity->allows($level)) {
@@ -218,6 +221,7 @@ class Output implements IsOutput
     /**
      * 输出一行文本
      */
+    #[\Override]
     public function line(string $text = '', Color|string $color = '', Verbosity $level = Verbosity::Normal): void
     {
         $this->write($text . PHP_EOL, $color, $level);
@@ -226,6 +230,7 @@ class Output implements IsOutput
     /**
      * 输出原始文本（不换行、不着色）
      */
+    #[\Override]
     public function raw(string $text): void
     {
         if ($this->isQuiet()) {
@@ -238,6 +243,7 @@ class Output implements IsOutput
     /**
      * 输出若干空行
      */
+    #[\Override]
     public function newLine(int $count = 1): void
     {
         if ($count > 0) {
@@ -256,6 +262,7 @@ class Output implements IsOutput
     /**
      * 信息（蓝色）
      */
+    #[\Override]
     public function info(string $msg): void
     {
         $this->line($msg, Color::Blue);
@@ -264,6 +271,7 @@ class Output implements IsOutput
     /**
      * 成功（绿色）
      */
+    #[\Override]
     public function success(string $msg): void
     {
         $this->line($msg, Color::Green);
@@ -288,6 +296,7 @@ class Output implements IsOutput
     /**
      * 警告（黄色，写入 STDERR）
      */
+    #[\Override]
     public function warn(string $msg): void
     {
         if ($this->isQuiet()) {
@@ -300,6 +309,7 @@ class Output implements IsOutput
     /**
      * 错误（红色，写入 STDERR，即便 quiet 也会输出）
      */
+    #[\Override]
     public function error(string $msg): void
     {
         $this->writeError($msg . PHP_EOL, Color::Red);

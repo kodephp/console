@@ -34,7 +34,7 @@ use Throwable;
 class Kernel implements IsKernel
 {
     /** 组件版本号 */
-    public const string VERSION = '5.0.1';
+    public const string VERSION = '5.0.2';
 
     /**
      * 获取本包版本号（与 composer.json 的 version 交叉核对，漏改由 VersionGuardTest 拦下）。
@@ -172,6 +172,7 @@ class Kernel implements IsKernel
      *
      * @throws InvalidCommandException
      */
+    #[\Override]
     public function add(string $cls): static
     {
         return $this->addCommand(Reflector::instantiate($cls));
@@ -198,6 +199,7 @@ class Kernel implements IsKernel
      *
      * @throws InvalidCommandException
      */
+    #[\Override]
     public function addCommand(Command $command): static
     {
         if (isset($this->cmds[$command->name])) {
@@ -350,6 +352,7 @@ class Kernel implements IsKernel
      *
      * @param array<int, string> $argv 完整命令行参数（含脚本名）
      */
+    #[\Override]
     public function boot(array $argv): int
     {
         $argv = array_values($argv);
@@ -561,6 +564,7 @@ class Kernel implements IsKernel
     /**
      * 查找命令（含别名），未找到返回 null
      */
+    #[\Override]
     public function find(string $name): ?Command
     {
         $name = $this->aliases[$name] ?? $name;
@@ -597,6 +601,7 @@ class Kernel implements IsKernel
      *
      * @return array<string, Command>
      */
+    #[\Override]
     public function all(): array
     {
         return $this->cmds;

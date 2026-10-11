@@ -133,6 +133,7 @@ abstract class Command implements IsCommand
      *
      * @return int 退出码，0 表示成功
      */
+    #[\Override]
     abstract public function fire(Input $in, Output $out): int;
 
     // ------------------------------------------------------------------
@@ -264,6 +265,7 @@ abstract class Command implements IsCommand
     /**
      * 输出命令的详细帮助
      */
+    #[\Override]
     public function showHelp(Input $in, Output $out): void
     {
         $out->line($this->name . ($this->desc === '' ? '' : " - {$this->desc}"), Color::BoldCyan);
@@ -374,6 +376,7 @@ abstract class Command implements IsCommand
      *
      * 内核会在执行 `fire()` 之前自动调用。
      */
+    #[\Override]
     public function validate(Input $in, Output $out): bool
     {
         $signature = $this->signature;
