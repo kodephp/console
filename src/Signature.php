@@ -118,7 +118,7 @@ final class Signature
      *
      * @return array{0: string, 1: string}
      */
-    private function splitDescription(string $token): array
+    private function splitDescription(#[\SensitiveParameter] string $token): array
     {
         $pos = strpos($token, self::DESCRIPTION_SEPARATOR);
 
@@ -135,7 +135,7 @@ final class Signature
     /**
      * 解析位置参数
      */
-    private function parseArgument(string $token, string $description): void
+    private function parseArgument(#[\SensitiveParameter] string $token, string $description): void
     {
         $required = true;
         $variadic = false;
@@ -188,7 +188,7 @@ final class Signature
     /**
      * 解析选项
      */
-    private function parseOption(string $token, string $description): void
+    private function parseOption(#[\SensitiveParameter] string $token, string $description): void
     {
         $acceptsValue = false;
         $valueRequired = false;
@@ -245,7 +245,7 @@ final class Signature
      *
      * @return array{0: string, 1: string|null}
      */
-    private function splitNames(string $token): array
+    private function splitNames(#[\SensitiveParameter] string $token): array
     {
         $name = '';
         $shortcut = null;

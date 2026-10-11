@@ -174,7 +174,7 @@ class Input implements IsInput
      *
      * @param array<int, string> $tokens
      */
-    private function parseLongOption(string $body, array $tokens, int $index): int
+    private function parseLongOption(string $body, #[\SensitiveParameter] array $tokens, int $index): int
     {
         if ($body === '') {
             return 0;
@@ -225,7 +225,7 @@ class Input implements IsInput
      *
      * @param array<int, string> $tokens
      */
-    private function parseShortOption(string $body, array $tokens, int $index): int
+    private function parseShortOption(string $body, #[\SensitiveParameter] array $tokens, int $index): int
     {
         $first = $body[0];
         $option = $this->signature?->optionForShortcut($first);
@@ -338,7 +338,7 @@ class Input implements IsInput
     /**
      * 是否是选项形式的 token（用于判断能否作为上一个选项的值）
      */
-    private function isOptionToken(string $token): bool
+    private function isOptionToken(#[\SensitiveParameter] string $token): bool
     {
         if (!str_starts_with($token, '-') || $token === '-') {
             return false;
@@ -350,7 +350,7 @@ class Input implements IsInput
     /**
      * 是否为负数字面量，如 `-1`、`-3.14`
      */
-    private function isNegativeNumber(string $token): bool
+    private function isNegativeNumber(#[\SensitiveParameter] string $token): bool
     {
         return is_numeric($token);
     }
