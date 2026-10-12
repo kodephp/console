@@ -53,12 +53,12 @@ abstract class Command implements IsCommand
     /**
      * 命令描述
      */
-    public string $desc;
+    public protected(set) string $desc;
 
     /**
      * 用法 / 签名定义
      */
-    public string $usage;
+    public protected(set) string $usage;
 
     /**
      * 命令别名
