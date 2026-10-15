@@ -28,8 +28,8 @@ final readonly class Argument
         public string $name,
         public ArgType $type = ArgType::String,
         public bool $required = true,
-        public mixed $default = null,
-        public bool $variadic = false,
+        public private(set) mixed $default = null,
+        public private(set) bool $variadic = false,
         public string $description = '',
     ) {
     }

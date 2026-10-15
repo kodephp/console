@@ -79,7 +79,7 @@ final class EventTest extends TestCase
 
         $manager->removeListener('x', $cb);
         $manager->dispatch(new Event('x'));
-        self::assertSame(1, $count);
+        self::assertSame(1, $count); // @phpstan-ignore staticMethod.alreadyNarrowedType (监听器计数器经闭包引用变化，静态不可证)
     }
 
     public function testForgetClearsAllWhenNoEventGiven(): void

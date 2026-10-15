@@ -29,9 +29,9 @@ final readonly class Option
         public string $name,
         public ?string $shortcut = null,
         public ArgType $type = ArgType::String,
-        public bool $acceptsValue = false,
-        public bool $valueRequired = false,
-        public mixed $default = null,
+        public private(set) bool $acceptsValue = false,
+        public private(set) bool $valueRequired = false,
+        public private(set) mixed $default = null,
         public string $description = '',
     ) {
     }
