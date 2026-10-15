@@ -8,7 +8,7 @@
 
 ## 版本自述
 
-本包版本可由类常量核对：`Kode\Console\Kernel::VERSION`，或调用 `Kernel::version()`（当前 `4.1.0`）。`composer.json` 的 `version` 是 composer 侧权威值，类常量是它的交叉核对副本——`tests/VersionGuardTest.php` 在两者不一致时直接失败。
+本包版本可由类常量核对：`Kode\Console\Kernel::VERSION`，或调用 `Kernel::version()`（当前 `5.2.0`）。`composer.json` 的 `version` 是 composer 侧权威值，类常量是它的交叉核对副本——`tests/VersionGuardTest.php` 在两者不一致时直接失败。
 
 ## 📦 简介
 
